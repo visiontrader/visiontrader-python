@@ -2,21 +2,21 @@
 
 from datetime import date
 
-from visiontrader import OptionsClient
+from visiontrader import VisionOptionsClient
 
 
 def main() -> None:
-    with OptionsClient() as client:
-        print("exchanges:", client.list_exchanges(type="options"))
-        print("instruments:", client.list_instruments("deribit"))
-        expiries = client.list_expiries("deribit", "BTC")
+    with VisionOptionsClient() as vision_options:
+        print("exchanges:", vision_options.list_exchanges())
+        print("instruments:", vision_options.list_instruments("deribit"))
+        expiries = vision_options.list_expiries("deribit", "BTC")
         if not expiries:
             return
         expiry = expiries[0].expiry
-        print("dates:", client.list_dates("deribit", "BTC", expiry))
-        dates = client.list_dates("deribit", "BTC", expiry)
+        print("dates:", vision_options.list_dates("deribit", "BTC", expiry))
+        dates = vision_options.list_dates("deribit", "BTC", expiry)
         if dates:
-            snaps = client.get_snapshots(
+            snaps = vision_options.get_snapshots(
                 "deribit",
                 "BTC",
                 expiry=expiry,

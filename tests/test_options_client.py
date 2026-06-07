@@ -3,8 +3,8 @@ from datetime import date, datetime, timezone
 import httpx
 import pytest
 
-from visiontrader import OptionsClient
-from visiontrader.exceptions import ValidationError
+from visiontrader import VisionOptionsClient
+from visiontrader.exceptions import ApiError, ValidationError
 
 
 def _mock_transport() -> httpx.MockTransport:
@@ -59,23 +59,23 @@ def _mock_transport() -> httpx.MockTransport:
 
 def test_list_exchanges() -> None:
     http = httpx.Client(transport=_mock_transport())
-    with OptionsClient(client=http) as client:
-        assert client.list_exchanges(type="options") == ["deribit"]
+    with VisionOptionsClient(client=http) as vision_options:
+        assert vision_options.list_exchanges() == ["deribit"]
 
 
 def test_list_instruments_and_expiries() -> None:
     http = httpx.Client(transport=_mock_transport())
-    with OptionsClient(client=http) as client:
-        assert client.list_instruments("deribit") == ["BTC", "BTC_USDC"]
-        expiries = client.list_expiries("deribit", "BTC")
+    with VisionOptionsClient(client=http) as vision_options:
+        assert vision_options.list_instruments("deribit") == ["BTC", "BTC_USDC"]
+        expiries = vision_options.list_expiries("deribit", "BTC")
         assert expiries[0].expiry == date(2026, 5, 1)
         assert expiries[0].settlement_period == "monthly"
 
 
 def test_get_snapshot() -> None:
     http = httpx.Client(transport=_mock_transport())
-    with OptionsClient(client=http) as client:
-        snap = client.get_snapshot(
+    with VisionOptionsClient(client=http) as vision_options:
+        snap = vision_options.get_snapshot(
             "deribit",
             "BTC",
             expiry=date(2026, 5, 1),
@@ -91,6 +91,31 @@ def test_validation_error() -> None:
         return httpx.Response(400, json={"error": "bad symbol", "code": -1})
 
     http = httpx.Client(transport=httpx.MockTransport(handler))
-    with OptionsClient(client=http) as client:
-        with pytest.raises(ValidationError, match="bad symbol"):
-            client.list_instruments("deribit")
+    with VisionOptionsClient(client=http) as vision_options:
+        with pytest.raises(ValidationError, match="bad symbol") as exc_info:
+            vision_options.list_instruments("deribit")
+        assert exc_info.value.code == -1
+
+
+def test_response_error_in_body() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"data": None, "error": "snapshot not found", "code": -2},
+        )
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    with VisionOptionsClient(client=http) as vision_options:
+        with pytest.raises(ApiError, match="snapshot not found") as exc_info:
+            vision_options.list_exchanges()
+        assert exc_info.value.code == -2
+
+
+def test_missing_data_field() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"error": None})
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    with VisionOptionsClient(client=http) as vision_options:
+        with pytest.raises(ApiError, match="Response missing 'data' field"):
+            vision_options.list_exchanges()

@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+import pandas as pd
 
 from visiontrader._http import HttpClient, unwrap_data
 from visiontrader.exceptions import SnapshotError
 from visiontrader.models import Expiry, OptionsSnapshot, expiry_from_json, snapshot_from_json
-
-if TYPE_CHECKING:
-    import pandas as pd
-
 
 def _format_date(value: date) -> str:
     return value.isoformat()
@@ -23,7 +21,7 @@ def _format_ts(value: datetime) -> str:
     return value.isoformat().replace("+00:00", "Z")
 
 
-class OptionsClient:
+class VisionOptionsClient:
     """
     Client for the VisionTrader Options REST API (VT.AspNetApp).
 
@@ -42,18 +40,15 @@ class OptionsClient:
     def close(self) -> None:
         self._http.close()
 
-    def __enter__(self) -> OptionsClient:
+    def __enter__(self) -> VisionOptionsClient:
         return self
 
     def __exit__(self, *args: object) -> None:
         self.close()
 
-    def list_exchanges(self, type: str | None = None) -> list[str]:
-        """GET /exchanges."""
-        params: dict[str, Any] = {}
-        if type is not None:
-            params["type"] = type
-        body = self._http.get_json("/exchanges", params=params or None)
+    def list_exchanges(self) -> list[str]:
+        """GET /exchanges?type=options — exchanges that provide options data."""
+        body = self._http.get_json("/exchanges", params={"type": "options"})
         return list(unwrap_data(body))
 
     def list_instruments(self, exchange: str) -> list[str]:
@@ -104,24 +99,10 @@ class OptionsClient:
                 "resolution": resolution,
             },
         )
-        error = body.get("error")
         raw = unwrap_data(body)
         if raw is None:
-            if error:
-                raise SnapshotError(error)
             raise SnapshotError("Empty snapshot data")
-        snapshot = snapshot_from_json(raw)
-        if error:
-            return OptionsSnapshot(
-                exchange=snapshot.exchange,
-                underlying=snapshot.underlying,
-                expiry=snapshot.expiry,
-                ts=snapshot.ts,
-                underlying_price=snapshot.underlying_price,
-                options=snapshot.options,
-                error=error,
-            )
-        return snapshot
+        return snapshot_from_json(raw)
 
     def get_snapshots(
         self,
@@ -143,23 +124,8 @@ class OptionsClient:
                 "resolution": resolution,
             },
         )
-        error = body.get("error")
         items = unwrap_data(body) or []
-        snapshots = [snapshot_from_json(item) for item in items]
-        if error:
-            return [
-                OptionsSnapshot(
-                    exchange=s.exchange,
-                    underlying=s.underlying,
-                    expiry=s.expiry,
-                    ts=s.ts,
-                    underlying_price=s.underlying_price,
-                    options=s.options,
-                    error=error,
-                )
-                for s in snapshots
-            ]
-        return snapshots
+        return [snapshot_from_json(item) for item in items]
 
     def snapshots_to_dataframe(
         self,
@@ -171,13 +137,6 @@ class OptionsClient:
         resolution: str = "1m",
     ) -> pd.DataFrame:
         """Load a day's snapshots as a long-format DataFrame."""
-        try:
-            import pandas as pd
-        except ImportError as exc:
-            raise ImportError(
-                "pandas is required. Install with: pip install visiontrader[pandas]"
-            ) from exc
-
         snapshots = self.get_snapshots(
             exchange,
             symbol,

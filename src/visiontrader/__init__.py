@@ -2,7 +2,7 @@
 
 from visiontrader.exceptions import ApiError, SnapshotError, ValidationError, VisionTraderError
 from visiontrader.models import Expiry, OptionLeg, OptionsSnapshot
-from visiontrader.options import OptionsClient
+from visiontrader.options import VisionOptionsClient
 
 __version__ = "0.1.0"
 
@@ -10,16 +10,16 @@ __all__ = [
     "ApiError",
     "Expiry",
     "OptionLeg",
-    "OptionsClient",
     "OptionsSnapshot",
     "SnapshotError",
     "ValidationError",
+    "VisionOptionsClient",
     "VisionTraderError",
     "__version__",
-    "options_client",
+    "vision_options_client",
 ]
 
 
-def options_client(**kwargs) -> OptionsClient:
-    """Create an :class:`OptionsClient` (for ``import visiontrader as vt``)."""
-    return OptionsClient(**kwargs)
+def vision_options_client(**kwargs) -> VisionOptionsClient:
+    """Create a :class:`VisionOptionsClient` (for ``import visiontrader as vt``)."""
+    return VisionOptionsClient(**kwargs)
