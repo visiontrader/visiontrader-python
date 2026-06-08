@@ -68,8 +68,17 @@ def test_list_instruments_and_expiries() -> None:
     with VisionOptionsClient(client=http) as vision_options:
         assert vision_options.list_instruments('deribit') == ['BTC', 'BTC_USDC']
         expiries = vision_options.list_expiries('deribit', 'BTC')
-        assert expiries[0].expiry == date(2026, 5, 1)
-        assert expiries[0].settlement_period == 'monthly'
+        assert list(expiries.columns) == ['expiry', 'settlement_period']
+        assert expiries.iloc[0]['expiry'] == date(2026, 5, 1)
+        assert expiries.iloc[0]['settlement_period'] == 'monthly'
+
+
+def test_list_dates() -> None:
+    http = httpx.Client(transport=_mock_transport())
+    with VisionOptionsClient(client=http) as vision_options:
+        dates = vision_options.list_dates('deribit', 'BTC', '2026-05-01')
+        assert list(dates.columns) == ['available dates']
+        assert dates.iloc[0]['available dates'] == date(2026, 4, 25)
 
 
 def test_get_snapshot() -> None:
@@ -82,9 +91,24 @@ def test_get_snapshot() -> None:
             datetime(2026, 4, 25, 12, 0, tzinfo=timezone.utc),
         )
         assert list(snap.columns) == [
-            'symbol', 'strike', 'type', 'bid', 'ask', 'markPrice', 'markIv', 'oi',
+            'exchange',
+            'underlying',
+            'expiry',
+            'ts',
+            'underlyingPrice',
+            'symbol',
+            'strike',
+            'type',
+            'bid',
+            'ask',
+            'markPrice',
+            'markIv',
+            'oi',
         ]
         assert len(snap) == 1
+        assert snap.iloc[0]['exchange'] == 'deribit'
+        assert snap.iloc[0]['underlying'] == 'BTC'
+        assert snap.iloc[0]['underlyingPrice'] == 77000.0
         assert snap.iloc[0]['symbol'] == 'BTC-1MAY26-70000-C'
         assert snap.iloc[0]['markIv'] == 0.48
 

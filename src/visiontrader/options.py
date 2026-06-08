@@ -10,13 +10,36 @@ import pandas as pd
 
 from visiontrader._http import HttpClient, unwrap_data
 from visiontrader.exceptions import SnapshotError
-from visiontrader.models import Expiry, OptionsSnapshot, expiry_from_json, snapshot_from_json
+from visiontrader.models import OptionsSnapshot, expiry_from_json, snapshot_from_json
+
+
+EXPIRY_COLUMNS = ['expiry', 'settlement_period']
+DATES_COLUMN = 'available dates'
+SNAPSHOT_COLUMNS = [
+    'exchange',
+    'underlying',
+    'expiry',
+    'ts',
+    'underlyingPrice',
+    'symbol',
+    'strike',
+    'type',
+    'bid',
+    'ask',
+    'markPrice',
+    'markIv',
+    'oi',
+]
 
 
 def _coerce_date(value: date | str) -> date:
+    if isinstance(value, str):
+        return date.fromisoformat(value)
+    if isinstance(value, datetime):
+        return value.date()
     if isinstance(value, date):
         return value
-    return date.fromisoformat(value)
+    return pd.Timestamp(value).date()
 
 
 def _coerce_datetime(value: datetime | str) -> datetime:
@@ -36,13 +59,17 @@ def _format_ts(value: datetime | str) -> str:
     return ts.isoformat().replace('+00:00', 'Z')
 
 
-SNAPSHOT_COLUMNS = ['symbol', 'strike', 'type', 'bid', 'ask', 'markPrice', 'markIv', 'oi']
-
-
 def _snapshot_to_dataframe(snapshot: OptionsSnapshot) -> pd.DataFrame:
+    if not snapshot.options:
+        return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
     return pd.DataFrame(
         [
             {
+                'exchange': snapshot.exchange,
+                'underlying': snapshot.underlying,
+                'expiry': snapshot.expiry,
+                'ts': snapshot.ts,
+                'underlyingPrice': snapshot.underlying_price,
                 'symbol': leg.symbol,
                 'strike': leg.strike,
                 'type': leg.type,
@@ -96,16 +123,20 @@ class VisionOptionsClient:
         )
         return list(unwrap_data(body))
 
-    def list_expiries(self, exchange: str, symbol: str) -> list[Expiry]:
-        """GET options/expiries."""
+    def list_expiries(self, exchange: str, symbol: str) -> pd.DataFrame:
+        """GET options/expiries — columns: ``expiry``, ``settlement_period``."""
         body = self._http.get_json(
             'options/expiries',
             params={'exchange': exchange, 'symbol': symbol},
         )
-        return [expiry_from_json(item) for item in unwrap_data(body)]
+        items = [expiry_from_json(item) for item in unwrap_data(body)]
+        return pd.DataFrame(
+            [{'expiry': e.expiry, 'settlement_period': e.settlement_period} for e in items],
+            columns=EXPIRY_COLUMNS,
+        )
 
-    def list_dates(self, exchange: str, symbol: str, expiry: date | str) -> list[date]:
-        """GET options/dates."""
+    def list_dates(self, exchange: str, symbol: str, expiry: date | str) -> pd.DataFrame:
+        """GET options/dates — column: ``available dates``."""
         body = self._http.get_json(
             'options/dates',
             params={
@@ -114,7 +145,8 @@ class VisionOptionsClient:
                 'expiry': _format_date(expiry),
             },
         )
-        return [date.fromisoformat(d) for d in unwrap_data(body)]
+        dates = [date.fromisoformat(d) for d in unwrap_data(body)]
+        return pd.DataFrame({DATES_COLUMN: dates})
 
     def get_snapshot(
         self,
@@ -130,7 +162,8 @@ class VisionOptionsClient:
         ``expiry``: ``yyyy-MM-dd`` string or :class:`datetime.date`.
         ``ts``: RFC3339 string (e.g. ``2026-04-25T12:00`` or ``...Z``) or :class:`datetime.datetime`.
 
-        Columns: ``symbol``, ``strike``, ``type``, ``bid``, ``ask``, ``markPrice``, ``markIv``, ``oi``.
+        Columns: ``exchange``, ``underlying``, ``expiry``, ``ts``, ``underlyingPrice``,
+        then per-leg ``symbol``, ``strike``, ``type``, ``bid``, ``ask``, ``markPrice``, ``markIv``, ``oi``.
         """
         body = self._http.get_json(
             '/options/snapshot',
@@ -151,9 +184,9 @@ class VisionOptionsClient:
         self,
         exchange: str,
         symbol: str,
+        expiry: date | str,
+        on_date: date | str,
         *,
-        expiry: date,
-        on_date: date,
         resolution: str = '1m',
     ) -> list[OptionsSnapshot]:
         """GET /options/snapshots."""
@@ -174,9 +207,9 @@ class VisionOptionsClient:
         self,
         exchange: str,
         symbol: str,
+        expiry: date | str,
+        on_date: date | str,
         *,
-        expiry: date,
-        on_date: date,
         resolution: str = '1m',
     ) -> pd.DataFrame:
         """Load a day's snapshots as a long-format DataFrame."""

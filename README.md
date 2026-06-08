@@ -27,11 +27,11 @@ pytest
 
 Connect to your API (default: `http://localhost:5259`, or set `VT_API_BASE_URL`).
 
-Example session (as in a Jupyter notebook; sample output from a live API):
-
-In [1]:
+Example session (as in a Jupyter notebook; sample output from a live API).
 
 Import dependencies and create the options client (`VisionOptionsClient` connects to the API; default is local, or pass `base_url` / set `VT_API_BASE_URL`).
+
+In [1]:
 
 ```python
 from datetime import date, datetime, timezone
@@ -39,30 +39,28 @@ import pandas as pd
 from visiontrader import VisionOptionsClient
 vision_options = VisionOptionsClient()  # VisionOptionsClient(base_url='https://api.example.com')
 ```
+<br>
+
+**List exchanges that provide options data** (the client requests only the options-capable subset).
 
 In [2]:
-
-List exchanges that provide options data (the client requests only the options-capable subset).
 
 ```python
 vision_options.list_exchanges()
 ```
 
-Out[2]:
-
 ```python
 ['deribit']
 ```
+<br>
+
+**Getting list symbols with option boards on Deribit** — not the exchange’s full instrument list, only names where historical options data is available.
 
 In [3]:
-
-List symbols with option boards on Deribit—not the exchange’s full instrument list, only names where historical options data is available.
 
 ```python
 vision_options.list_instruments('deribit')
 ```
-
-Out[3]:
 
 ```python
 [
@@ -77,18 +75,15 @@ Out[3]:
     'XRP_USDC',
 ]
 ```
+<br>
+
+**Fetch expiry dates and settlement period types for BTC** (`tail` shows the last rows when the list is long).
 
 In [4]:
 
-Fetch expiry dates and settlement period types for BTC, then display them as a table (`tail` shows the last rows when the list is long).
-
 ```python
-expiries = vision_options.list_expiries('deribit', 'BTC')
-df = pd.DataFrame([{'expiry': e.expiry, 'settlement_period': e.settlement_period} for e in expiries])
-df.tail(22).reset_index(drop=True)
+vision_options.list_expiries('deribit', 'BTC').tail(22).reset_index(drop=True)
 ```
-
-Out[4]:
 
 ```
        expiry settlement_period
@@ -115,17 +110,15 @@ Out[4]:
 20 2026-12-25             month
 21 2027-03-26             month
 ```
+<br>
+
+**Show calendar dates on which snapshot data exists for the selected expiry.**
 
 In [5]:
 
-Show calendar dates on which snapshot data exists for the selected expiry.
-
 ```python
-dates = vision_options.list_dates('deribit', 'BTC', '2026-06-04')
-pd.DataFrame({'available dates': dates})
+vision_options.list_dates('deribit', 'BTC', '2026-06-04')
 ```
-
-Out[5]:
 
 ```
    available dates
@@ -135,27 +128,86 @@ Out[5]:
 3    2026-06-03
 4    2026-06-04
 ```
+<br>
+
+**Load a single options board at a given timestamp.** Returns a DataFrame: snapshot fields (`exchange`, `underlying`, `expiry`, `ts`, `underlyingPrice`) on every row, plus strike-level bid/ask, mark, IV, and OI.
 
 In [6]:
-
-Load a single options board at a given timestamp. Returns a DataFrame with strikes, bid/ask, mark price, implied volatility, and open interest.
 
 ```python
 snap = vision_options.get_snapshot('deribit', 'BTC', '2026-06-04', '2026-06-03T12:00')
 snap.head(6)
 ```
 
-Out[6]:
+```
+   exchange underlying      expiry                        ts  underlyingPrice              symbol  strike  type     bid     ask  markPrice  markIv    oi
+0   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-61000-C   61000  call  0.0845  0.0940     0.0889  0.8781   NaN
+1   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-61000-P   61000   put  0.0001  0.0003     0.0002  0.8780  79.1
+2   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-62000-C   62000  call  0.0700  0.0790     0.0741  0.8335   0.2
+3   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-62000-P   62000   put  0.0003  0.0005     0.0004  0.8335  38.2
+4   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-63000-C   63000  call  0.0555  0.0640     0.0595  0.7652   NaN
+5   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-63000-P   63000   put  0.0006  0.0008     0.0007  0.7652  92.3
+```
+<br>
+
+**Compute moneyness**  (strike / underlying price) to see how far each leg is from at-the-money (`moneyness ≈ 1.0`). Because `underlyingPrice` is on every row, no extra merge is needed. Filter by moneyness — not by absolute strikes — to keep only legs near ATM on any board.
+
+In [7]:
+
+```python
+m = snap.assign(moneyness=snap['strike'] / snap['underlyingPrice'])
+m.loc[m['moneyness'].between(0.98, 1.02), ['symbol', 'type', 'strike', 'underlyingPrice', 'moneyness', 'markIv']]
+```
 
 ```
-              symbol  strike  type     bid     ask  markPrice  markIv    oi
-0  BTC-4JUN26-61000-C   61000  call  0.0845  0.0940     0.0889   87.81   NaN
-1  BTC-4JUN26-61000-P   61000   put  0.0001  0.0003     0.0002   87.80  79.1
-2  BTC-4JUN26-62000-C   62000  call  0.0700  0.0790     0.0741   83.35   0.2
-3  BTC-4JUN26-62000-P   62000   put  0.0003  0.0005     0.0004   83.35  38.2
-4  BTC-4JUN26-63000-C   63000  call  0.0555  0.0640     0.0595   76.52   NaN
-5  BTC-4JUN26-63000-P   63000   put  0.0006  0.0008     0.0007   76.52  92.3
+              symbol  type  strike  underlyingPrice  moneyness  markIv
+26  BTC-4JUN26-66000-C  call   66000         66948.82     0.9844  0.5746
+27  BTC-4JUN26-66000-P   put   66000         66948.82     0.9844  0.5746
+28  BTC-4JUN26-66500-C  call   66500         66948.82     0.9933  0.5416
+29  BTC-4JUN26-66500-P   put   66500         66948.82     0.9933  0.5416
+30  BTC-4JUN26-67000-C  call   67000         66948.82     1.0008  0.5102
+31  BTC-4JUN26-67000-P   put   67000         66948.82     1.0008  0.5102
+32  BTC-4JUN26-67500-C  call   67500         66948.82     1.0082  0.4905
+33  BTC-4JUN26-67500-P   put   67500         66948.82     1.0082  0.4905
+34  BTC-4JUN26-68000-C  call   68000         66948.82     1.0156  0.4685
+35  BTC-4JUN26-68000-P   put   68000         66948.82     1.0156  0.4685
 ```
+<br>
+
+**Plot the volatility smile from the same snapshot**. On Deribit `markIv` is the same per strike for calls and puts — one line per strike is enough.
+
+Requires `matplotlib` (usual in Jupyter: `pip install matplotlib`).
+
+In [8]:
+
+```python
+import matplotlib.pyplot as plt
+
+smile = (
+    snap.loc[snap['type'] == 'call']
+    .dropna(subset=['markIv'])
+    .assign(moneyness=lambda df: df['strike'] / df['underlyingPrice'])
+    .loc[lambda df: df['moneyness'] <= 1.13]
+    .sort_values('moneyness')
+)
+
+fig, ax = plt.subplots(figsize=(8, 3.5))
+ax.plot(smile['moneyness'], smile['markIv'], 'o-', label='mark IV', markersize=4)
+ax.axvline(1.0, color='red', linestyle='--', linewidth=0.8)
+ax.set_xlabel('moneyness')
+ax.set_ylabel('mark IV')
+ax.set_title('BTC vol smile — Deribit 4JUN26 @ 2026-06-03 12:00 UTC')
+ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
+ax.legend()
+plt.tight_layout()
+plt.savefig('vol_smile.png', dpi=150)
+plt.show()
+```
+
+![BTC vol smile — Deribit 4JUN26 @ 2026-06-03 12:00 UTC](docs/images/vol_smile.png)
+
+<small><em>Why trim the right wing (`moneyness &lt;= 1.13`)? Beyond that point the curve in the raw API data stops behaving like a market smile and flattens into a plateau. From strike 76500 onward (moneyness ≈ 1.14+) `markIv` is stuck at ~0.8505 while moneyness keeps increasing — seven strikes in a row, identical IV. On the call side those legs have no real market: `bid` is null, `ask` is the minimum tick (0.0001), `markPrice` is 0 or null. Puts at the same strikes still have a rising `markPrice`, but Deribit assigns the same capped `markIv` per strike. That pattern is typical of mark-model extrapolation / IV ceiling on illiquid deep OTM wings, not tradeable skew. Trimming keeps the chart focused on the liquid part of the board where IV actually varies with moneyness. For analysis of the full raw board, drop the filter and inspect `markPrice` and quotes alongside `markIv`.</em></small>
+
 
 ## API coverage (v0.1)
 
@@ -163,8 +215,8 @@ Out[6]:
 |--------|------|
 | `list_exchanges()` | `GET /exchanges?type=options` |
 | `list_instruments(exchange)` | `GET options/instruments` |
-| `list_expiries(exchange, symbol)` | `GET options/expiries` |
-| `list_dates(exchange, symbol, expiry)` | `GET options/dates` |
+| `list_expiries(exchange, symbol)` | `GET options/expiries` → DataFrame |
+| `list_dates(exchange, symbol, expiry)` | `GET options/dates` → DataFrame |
 | `get_snapshot(...)` | `GET /options/snapshot` → DataFrame |
 | `get_snapshots(..., on_date=...)` | `GET /options/snapshots` |
 | `snapshots_to_dataframe(...)` | `GET /options/snapshots` → DataFrame |

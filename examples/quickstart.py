@@ -10,19 +10,20 @@ def main() -> None:
         print('exchanges:', vision_options.list_exchanges())
         print('instruments:', vision_options.list_instruments('deribit'))
         expiries = vision_options.list_expiries('deribit', 'BTC')
-        if not expiries:
+        if expiries.empty:
             return
-        expiry = expiries[0].expiry
+        expiry = expiries.iloc[0]['expiry']
         print('dates:', vision_options.list_dates('deribit', 'BTC', expiry))
         dates = vision_options.list_dates('deribit', 'BTC', expiry)
-        if dates:
+        if not dates.empty:
+            on_date = dates['available dates'].iloc[-1]
             snaps = vision_options.get_snapshots(
                 'deribit',
                 'BTC',
                 expiry=expiry,
-                on_date=dates[-1],
+                on_date=on_date,
             )
-            print(f'snapshots on {dates[-1]}:', len(snaps))
+            print(f'snapshots on {on_date}:', len(snaps))
 
 
 if __name__ == '__main__':
