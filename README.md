@@ -1,6 +1,18 @@
 # visiontrader-python
 
-VisionTrader — Your navigator in the world of options and high-frequency data. Analyze historical Deribit options in near real-time. View historical IV, mark prices, and open interest—bridging the gap between the past and the present moment.
+VisionTrader is a quantitative research toolkit for cryptocurrency options markets.
+
+Historical options data is available five minutes after market events occur.
+
+Analyze volatility smiles, term structures, open interest, and option market dynamics directly from Pandas DataFrames.
+
+**Why VisionTrader:**
+
+- Option boards returned directly as Pandas DataFrames
+- Exchange-normalized implied volatility values
+- Designed for Jupyter notebooks and quantitative research
+- Built for volatility smile and term structure analysis
+- Consistent cross-exchange data model
 
 ## Install
 
