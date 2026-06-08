@@ -4,23 +4,19 @@ VisionTrader — Your navigator in the world of options and high-frequency data.
 
 ## Install
 
-```bash
-pip install visiontrader
-```
-
-Requires **pandas** (installed automatically):
-
-```python
-import pandas as pd
-```
-
-Development:
+From source (requires Python 3.10+):
 
 ```bash
 git clone https://github.com/visiontrader/visiontrader-python.git
 cd visiontrader-python
 pip install -e ".[dev]"
 pytest
+```
+
+**pandas** is a core dependency (installed automatically):
+
+```python
+import pandas as pd
 ```
 
 ## Quickstart
