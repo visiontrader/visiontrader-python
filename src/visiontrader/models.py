@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Literal
 
-OptionType = Literal["call", "put"]
+OptionType = Literal['call', 'put']
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,36 +43,36 @@ def _parse_date(value: str) -> date:
 
 
 def _parse_ts(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return datetime.fromisoformat(value.replace('Z', '+00:00'))
 
 
 def expiry_from_json(item: dict[str, Any]) -> Expiry:
-    period = item.get("settlement_period")
+    period = item.get('settlement_period')
     return Expiry(
-        expiry=_parse_date(item["expiry"]),
-        settlement_period=None if period in (None, "") else str(period),
+        expiry=_parse_date(item['expiry']),
+        settlement_period=None if period in (None, '') else str(period),
     )
 
 
 def option_leg_from_json(item: dict[str, Any]) -> OptionLeg:
     return OptionLeg(
-        symbol=item["symbol"],
-        strike=float(item["strike"]),
-        type=item["type"],
-        bid=item.get("bid"),
-        ask=item.get("ask"),
-        mark_price=item.get("markPrice"),
-        mark_iv=item.get("markIv"),
-        oi=item.get("oi"),
+        symbol=item['symbol'],
+        strike=float(item['strike']),
+        type=item['type'],
+        bid=item.get('bid'),
+        ask=item.get('ask'),
+        mark_price=item.get('markPrice'),
+        mark_iv=item.get('markIv'),
+        oi=item.get('oi'),
     )
 
 
 def snapshot_from_json(payload: dict[str, Any]) -> OptionsSnapshot:
     return OptionsSnapshot(
-        exchange=payload["exchange"],
-        underlying=payload["underlying"],
-        expiry=_parse_date(payload["expiry"]),
-        ts=_parse_ts(payload["ts"]),
-        underlying_price=payload.get("underlyingPrice"),
-        options=tuple(option_leg_from_json(o) for o in payload.get("options", [])),
+        exchange=payload['exchange'],
+        underlying=payload['underlying'],
+        expiry=_parse_date(payload['expiry']),
+        ts=_parse_ts(payload['ts']),
+        underlying_price=payload.get('underlyingPrice'),
+        options=tuple(option_leg_from_json(o) for o in payload.get('options', [])),
     )

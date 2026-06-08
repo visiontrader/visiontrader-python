@@ -4,19 +4,19 @@ from visiontrader.exceptions import ApiError, SnapshotError, ValidationError, Vi
 from visiontrader.models import Expiry, OptionLeg, OptionsSnapshot
 from visiontrader.options import VisionOptionsClient
 
-__version__ = "0.1.0"
+__version__ = '0.1.0'
 
 __all__ = [
-    "ApiError",
-    "Expiry",
-    "OptionLeg",
-    "OptionsSnapshot",
-    "SnapshotError",
-    "ValidationError",
-    "VisionOptionsClient",
-    "VisionTraderError",
-    "__version__",
-    "vision_options_client",
+    'ApiError',
+    'Expiry',
+    'OptionLeg',
+    'OptionsSnapshot',
+    'SnapshotError',
+    'ValidationError',
+    'VisionOptionsClient',
+    'VisionTraderError',
+    '__version__',
+    'vision_options_client',
 ]
 
 
