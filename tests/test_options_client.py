@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -85,7 +86,6 @@ def test_get_snapshot() -> None:
     http = httpx.Client(transport=_mock_transport())
     with VisionOptionsClient(client=http) as vision_options:
         snap = vision_options.get_snapshot(
-            'deribit',
             'BTC',
             date(2026, 5, 1),
             datetime(2026, 4, 25, 12, 0, tzinfo=timezone.utc),
@@ -98,6 +98,7 @@ def test_get_snapshot() -> None:
             'underlyingPrice',
             'symbol',
             'strike',
+            'moneyness',
             'type',
             'bid',
             'ask',
@@ -110,6 +111,7 @@ def test_get_snapshot() -> None:
         assert snap.iloc[0]['underlying'] == 'BTC'
         assert snap.iloc[0]['underlyingPrice'] == 77000.0
         assert snap.iloc[0]['symbol'] == 'BTC-1MAY26-70000-C'
+        assert snap.iloc[0]['moneyness'] == pytest.approx(70000 / 77000)
         assert snap.iloc[0]['markIv'] == 0.48
 
 
@@ -117,7 +119,6 @@ def test_get_snapshot_string_args() -> None:
     http = httpx.Client(transport=_mock_transport())
     with VisionOptionsClient(client=http) as vision_options:
         snap = vision_options.get_snapshot(
-            'deribit',
             'BTC',
             '2026-05-01',
             '2026-04-25T12:00:00Z',
@@ -126,13 +127,55 @@ def test_get_snapshot_string_args() -> None:
         assert snap.iloc[0]['symbol'] == 'BTC-1MAY26-70000-C'
 
 
+def test_get_snapshot_resolves_next_daily() -> None:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith('/expiries'):
+            return httpx.Response(
+                200,
+                json={
+                    'data': [
+                        {'expiry': '2026-06-09', 'settlement_period': 'day'},
+                        {'expiry': '2026-06-10', 'settlement_period': 'day'},
+                        {'expiry': '2026-06-11', 'settlement_period': 'day'},
+                    ],
+                },
+            )
+        if request.url.path == '/options/snapshot':
+            seen.update(dict(request.url.params))
+            return httpx.Response(
+                200,
+                json={
+                    'data': {
+                        'exchange': 'deribit',
+                        'underlying': 'BTC',
+                        'expiry': '2026-06-10',
+                        'ts': '2026-06-09T11:56:00Z',
+                        'underlyingPrice': 67000.0,
+                        'options': [],
+                    },
+                    'error': None,
+                },
+            )
+        return httpx.Response(404)
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    with VisionOptionsClient(client=http) as client:
+        with patch('visiontrader.resolvers.datetime') as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+            client.get_snapshot('BTC', 'next_daily', '-4m')
+    assert seen['expiry'] == '2026-06-10'
+    assert seen['instrument'] == 'BTC'
+
+
 def test_validation_error() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(400, json={'error': 'bad symbol', 'code': -1})
+        return httpx.Response(400, json={'error': 'bad instrument', 'code': -1})
 
     http = httpx.Client(transport=httpx.MockTransport(handler))
     with VisionOptionsClient(client=http) as vision_options:
-        with pytest.raises(ValidationError, match='bad symbol') as exc_info:
+        with pytest.raises(ValidationError, match='bad instrument') as exc_info:
             vision_options.list_instruments('deribit')
         assert exc_info.value.code == -1
 

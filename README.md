@@ -33,6 +33,26 @@ import pandas as pd
 
 ## Quickstart
 
+Requires a running VT.AspNetApp API and plotting extras:
+
+```bash
+pip install -e ".[plots]"
+```
+
+In [1]:
+
+```python
+from visiontrader import VisionOptionsClient
+from visiontrader.plots import PlotSmile
+
+vt = VisionOptionsClient()
+snap = vt.get_snapshot(instrument="BTC", expiry="next_daily", ts="-4m")
+smile = vt.get_smile(snap, 'call')
+PlotSmile(smile)
+```
+
+## Tutorial
+
 Connect to your API (default: `http://localhost:5259`, or set `VT_API_BASE_URL`).
 
 Example session (as in a Jupyter notebook; sample output from a live API).
@@ -138,33 +158,32 @@ vision_options.list_dates('deribit', 'BTC', '2026-06-04')
 ```
 <br>
 
-**Load a single options board at a given timestamp.** Returns a DataFrame: snapshot fields (`exchange`, `underlying`, `expiry`, `ts`, `underlyingPrice`) on every row, plus strike-level bid/ask, mark, IV, and OI.
+**Load a single options board at a given timestamp.** Returns a DataFrame: snapshot fields (`exchange`, `underlying`, `expiry`, `ts`, `underlyingPrice`) on every row, plus strike-level `moneyness` (`strike / underlyingPrice`), bid/ask, mark, IV, and OI.
 
 In [6]:
 
 ```python
-snap = vision_options.get_snapshot('deribit', 'BTC', '2026-06-04', '2026-06-03T12:00')
+snap = vision_options.get_snapshot('BTC', '2026-06-04', '2026-06-03T12:00')
 snap.head(6)
 ```
 
 ```
-   exchange underlying      expiry                        ts  underlyingPrice              symbol  strike  type     bid     ask  markPrice  markIv    oi
-0   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-61000-C   61000  call  0.0845  0.0940     0.0889  0.8781   NaN
-1   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-61000-P   61000   put  0.0001  0.0003     0.0002  0.8780  79.1
-2   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-62000-C   62000  call  0.0700  0.0790     0.0741  0.8335   0.2
-3   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-62000-P   62000   put  0.0003  0.0005     0.0004  0.8335  38.2
-4   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-63000-C   63000  call  0.0555  0.0640     0.0595  0.7652   NaN
-5   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-63000-P   63000   put  0.0006  0.0008     0.0007  0.7652  92.3
+   exchange underlying      expiry                        ts  underlyingPrice              symbol  strike  moneyness  type     bid     ask  markPrice  markIv    oi
+0   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-61000-C   61000     0.9111  call  0.0845  0.0940     0.0889  0.8781   NaN
+1   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-61000-P   61000     0.9111   put  0.0001  0.0003     0.0002  0.8780  79.1
+2   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-62000-C   62000     0.9261  call  0.0700  0.0790     0.0741  0.8335   0.2
+3   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-62000-P   62000     0.9261   put  0.0003  0.0005     0.0004  0.8335  38.2
+4   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-63000-C   63000     0.9410  call  0.0555  0.0640     0.0595  0.7652   NaN
+5   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-63000-P   63000     0.9410   put  0.0006  0.0008     0.0007  0.7652  92.3
 ```
 <br>
 
-**Compute moneyness**  (strike / underlying price) to see how far each leg is from at-the-money (`moneyness ≈ 1.0`). Because `underlyingPrice` is on every row, no extra merge is needed. Filter by moneyness — not by absolute strikes — to keep only legs near ATM on any board.
+**Filter by moneyness** to see how far each leg is from at-the-money (`moneyness ≈ 1.0`). The column is computed in the SDK — filter by moneyness, not by absolute strikes, to keep only legs near ATM on any board.
 
 In [7]:
 
 ```python
-m = snap.assign(moneyness=snap['strike'] / snap['underlyingPrice'])
-m.loc[m['moneyness'].between(0.98, 1.02), ['symbol', 'type', 'strike', 'underlyingPrice', 'moneyness', 'markIv']]
+snap.loc[snap['moneyness'].between(0.98, 1.02), ['symbol', 'type', 'strike', 'underlyingPrice', 'moneyness', 'markIv']]
 ```
 
 ```
@@ -194,7 +213,6 @@ import matplotlib.pyplot as plt
 smile = (
     snap.loc[snap['type'] == 'call']
     .dropna(subset=['markIv'])
-    .assign(moneyness=lambda df: df['strike'] / df['underlyingPrice'])
     .loc[lambda df: df['moneyness'] <= 1.13]
     .sort_values('moneyness')
 )
@@ -223,13 +241,19 @@ plt.show()
 |--------|------|
 | `list_exchanges()` | `GET /exchanges?type=options` |
 | `list_instruments(exchange)` | `GET options/instruments` |
-| `list_expiries(exchange, symbol)` | `GET options/expiries` → DataFrame |
-| `list_dates(exchange, symbol, expiry)` | `GET options/dates` → DataFrame |
+| `list_expiries(exchange, instrument)` | `GET options/expiries` → DataFrame |
+| `list_dates(exchange, instrument, expiry)` | `GET options/dates` → DataFrame |
 | `get_snapshot(...)` | `GET /options/snapshot` → DataFrame |
+| `get_smile(snap, type, min=0.9, max=1.13)` | snapshot → smile DataFrame |
 | `get_snapshots(..., on_date=...)` | `GET /options/snapshots` |
 | `snapshots_to_dataframe(...)` | `GET /options/snapshots` → DataFrame |
+| `PlotSmile(smile)` | vol smile plot → `(fig, ax)` (`visiontrader.plots`) |
 
-Query parameter for the board symbol is **`symbol`** (not `instrument`).
+Query parameter for the board instrument is **`instrument`**.
+
+`get_snapshot` defaults to `exchange='deribit'`, accepts expiry aliases
+(`next_daily`, `next_weekly`, `next_monthly`, `next_quarterly`) and relative timestamps
+(`-4m`, `-1h`, `-1d`, case-insensitive units).
 
 ## Backend
 

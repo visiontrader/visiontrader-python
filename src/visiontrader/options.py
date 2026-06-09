@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Literal
 
 import httpx
 import pandas as pd
@@ -11,6 +11,7 @@ import pandas as pd
 from visiontrader._http import HttpClient, unwrap_data
 from visiontrader.exceptions import SnapshotError
 from visiontrader.models import OptionsSnapshot, expiry_from_json, snapshot_from_json
+from visiontrader.resolvers import is_expiry_alias, resolve_expiry, resolve_ts
 
 
 EXPIRY_COLUMNS = ['expiry', 'settlement_period']
@@ -23,6 +24,7 @@ SNAPSHOT_COLUMNS = [
     'underlyingPrice',
     'symbol',
     'strike',
+    'moneyness',
     'type',
     'bid',
     'ask',
@@ -30,6 +32,10 @@ SNAPSHOT_COLUMNS = [
     'markIv',
     'oi',
 ]
+OptionType = Literal['call', 'put']
+DEFAULT_EXCHANGE = 'deribit'
+DEFAULT_SMILE_MIN_MONEYNESS = 0.9
+DEFAULT_SMILE_MAX_MONEYNESS = 1.13
 
 
 def _coerce_date(value: date | str) -> date:
@@ -59,6 +65,12 @@ def _format_ts(value: datetime | str) -> str:
     return ts.isoformat().replace('+00:00', 'Z')
 
 
+def _leg_moneyness(strike: float, underlying_price: float | None) -> float | None:
+    if underlying_price is None or underlying_price == 0:
+        return None
+    return strike / underlying_price
+
+
 def _snapshot_to_dataframe(snapshot: OptionsSnapshot) -> pd.DataFrame:
     if not snapshot.options:
         return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
@@ -72,6 +84,7 @@ def _snapshot_to_dataframe(snapshot: OptionsSnapshot) -> pd.DataFrame:
                 'underlyingPrice': snapshot.underlying_price,
                 'symbol': leg.symbol,
                 'strike': leg.strike,
+                'moneyness': _leg_moneyness(leg.strike, snapshot.underlying_price),
                 'type': leg.type,
                 'bid': leg.bid,
                 'ask': leg.ask,
@@ -89,7 +102,7 @@ class VisionOptionsClient:
     """
     Client for the VisionTrader Options REST API (VT.AspNetApp).
 
-    Query parameter for the board symbol is ``symbol`` (e.g. BTC, BTC_USDC).
+    Query parameter for the board instrument is ``instrument`` (e.g. BTC, BTC_USDC).
     """
 
     def __init__(
@@ -123,11 +136,11 @@ class VisionOptionsClient:
         )
         return list(unwrap_data(body))
 
-    def list_expiries(self, exchange: str, symbol: str) -> pd.DataFrame:
+    def list_expiries(self, exchange: str, instrument: str) -> pd.DataFrame:
         """GET options/expiries — columns: ``expiry``, ``settlement_period``."""
         body = self._http.get_json(
             'options/expiries',
-            params={'exchange': exchange, 'symbol': symbol},
+            params={'exchange': exchange, 'instrument': instrument},
         )
         items = [expiry_from_json(item) for item in unwrap_data(body)]
         return pd.DataFrame(
@@ -135,43 +148,60 @@ class VisionOptionsClient:
             columns=EXPIRY_COLUMNS,
         )
 
-    def list_dates(self, exchange: str, symbol: str, expiry: date | str) -> pd.DataFrame:
+    def list_dates(self, exchange: str, instrument: str, expiry: date | str) -> pd.DataFrame:
         """GET options/dates — column: ``available dates``."""
         body = self._http.get_json(
             'options/dates',
             params={
                 'exchange': exchange,
-                'symbol': symbol,
+                'instrument': instrument,
                 'expiry': _format_date(expiry),
             },
         )
         dates = [date.fromisoformat(d) for d in unwrap_data(body)]
         return pd.DataFrame({DATES_COLUMN: dates})
 
-    def get_snapshot(
+    def _resolve_snapshot_expiry(
         self,
         exchange: str,
-        symbol: str,
+        instrument: str,
+        expiry: date | str,
+    ) -> date:
+        if isinstance(expiry, str) and is_expiry_alias(expiry):
+            expiries = self.list_expiries(exchange, instrument)
+            return resolve_expiry(expiry, expiries)
+        return _coerce_date(expiry)
+
+    def get_snapshot(
+        self,
+        instrument: str,
         expiry: date | str,
         ts: datetime | str,
         *,
+        exchange: str = DEFAULT_EXCHANGE,
         resolution: str = '1m',
     ) -> pd.DataFrame:
         """GET /options/snapshot — returns an options board as a DataFrame.
 
-        ``expiry``: ``yyyy-MM-dd`` string or :class:`datetime.date`.
-        ``ts``: RFC3339 string (e.g. ``2026-04-25T12:00`` or ``...Z``) or :class:`datetime.datetime`.
+        ``exchange`` defaults to ``deribit``.
+        ``expiry``: ``yyyy-MM-dd``, :class:`datetime.date`, or an alias such as
+        ``next_daily`` / ``next_weekly`` / ``next_monthly`` / ``next_quarterly``.
+        ``ts``: RFC3339 string, :class:`datetime.datetime`, or a relative offset
+        such as ``-4m``, ``-1h``, ``-1d`` (UTC, backward only).
 
         Columns: ``exchange``, ``underlying``, ``expiry``, ``ts``, ``underlyingPrice``,
-        then per-leg ``symbol``, ``strike``, ``type``, ``bid``, ``ask``, ``markPrice``, ``markIv``, ``oi``.
+        then per-leg ``symbol``, ``strike``, ``moneyness``, ``type``, ``bid``, ``ask``,
+        ``markPrice``, ``markIv``, ``oi``. ``moneyness`` is ``strike / underlyingPrice``.
         """
+        resolved_expiry = self._resolve_snapshot_expiry(exchange, instrument, expiry)
+        resolved_ts = resolve_ts(ts)
         body = self._http.get_json(
             '/options/snapshot',
             params={
                 'exchange': exchange,
-                'symbol': symbol,
-                'expiry': _format_date(expiry),
-                'ts': _format_ts(ts),
+                'instrument': instrument,
+                'expiry': _format_date(resolved_expiry),
+                'ts': _format_ts(resolved_ts),
                 'resolution': resolution,
             },
         )
@@ -180,10 +210,26 @@ class VisionOptionsClient:
             raise SnapshotError('Empty snapshot data')
         return _snapshot_to_dataframe(snapshot_from_json(raw))
 
+    def get_smile(
+        self,
+        snap: pd.DataFrame,
+        option_type: OptionType,
+        min_moneyness: float = DEFAULT_SMILE_MIN_MONEYNESS,
+        max_moneyness: float = DEFAULT_SMILE_MAX_MONEYNESS,
+    ) -> pd.DataFrame:
+        """Build a volatility smile DataFrame from a snapshot board."""
+        return (
+            snap.loc[snap['type'] == option_type]
+            .dropna(subset=['markIv'])
+            .loc[lambda df: df['moneyness'].between(min_moneyness, max_moneyness)]
+            .sort_values('moneyness')
+            .reset_index(drop=True)
+        )
+
     def get_snapshots(
         self,
         exchange: str,
-        symbol: str,
+        instrument: str,
         expiry: date | str,
         on_date: date | str,
         *,
@@ -194,7 +240,7 @@ class VisionOptionsClient:
             '/options/snapshots',
             params={
                 'exchange': exchange,
-                'symbol': symbol,
+                'instrument': instrument,
                 'expiry': _format_date(expiry),
                 'date': _format_date(on_date),
                 'resolution': resolution,
@@ -206,7 +252,7 @@ class VisionOptionsClient:
     def snapshots_to_dataframe(
         self,
         exchange: str,
-        symbol: str,
+        instrument: str,
         expiry: date | str,
         on_date: date | str,
         *,
@@ -215,29 +261,14 @@ class VisionOptionsClient:
         """Load a day's snapshots as a long-format DataFrame."""
         snapshots = self.get_snapshots(
             exchange,
-            symbol,
+            instrument,
             expiry=expiry,
             on_date=on_date,
             resolution=resolution,
         )
-        rows: list[dict[str, Any]] = []
-        for snap in snapshots:
-            for leg in snap.options:
-                rows.append(
-                    {
-                        'exchange': snap.exchange,
-                        'underlying': snap.underlying,
-                        'expiry': snap.expiry,
-                        'ts': snap.ts,
-                        'underlying_price': snap.underlying_price,
-                        'symbol': leg.symbol,
-                        'strike': leg.strike,
-                        'type': leg.type,
-                        'bid': leg.bid,
-                        'ask': leg.ask,
-                        'mark_price': leg.mark_price,
-                        'mark_iv': leg.mark_iv,
-                        'oi': leg.oi,
-                    }
-                )
-        return pd.DataFrame(rows)
+        if not snapshots:
+            return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
+        return pd.concat(
+            [_snapshot_to_dataframe(snapshot) for snapshot in snapshots],
+            ignore_index=True,
+        )
