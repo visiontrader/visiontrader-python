@@ -94,6 +94,7 @@ def test_get_snapshot() -> None:
             'exchange',
             'underlying',
             'expiry',
+            'settlement_period',
             'ts',
             'underlyingPrice',
             'symbol',
@@ -109,6 +110,7 @@ def test_get_snapshot() -> None:
         assert len(snap) == 1
         assert snap.iloc[0]['exchange'] == 'deribit'
         assert snap.iloc[0]['underlying'] == 'BTC'
+        assert snap.iloc[0]['settlement_period'] == 'monthly'
         assert snap.iloc[0]['underlyingPrice'] == 77000.0
         assert snap.iloc[0]['symbol'] == 'BTC-1MAY26-70000-C'
         assert snap.iloc[0]['moneyness'] == pytest.approx(70000 / 77000)

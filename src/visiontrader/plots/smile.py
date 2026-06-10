@@ -35,13 +35,15 @@ def _smile_title(smile: pd.DataFrame) -> str:
     underlying = row['underlying']
     exchange = str(row['exchange']).capitalize()
     expiry_label = str(row['symbol']).split('-')[1]
+    period = row.get('settlement_period')
+    period_part = f' [{period}]' if period is not None and not pd.isna(period) else ''
     ts = pd.Timestamp(row['ts'])
     if ts.tzinfo is not None:
         ts = ts.tz_convert('UTC')
     else:
         ts = ts.tz_localize('UTC')
-    ts_label = f"{ts.strftime('%Y-%m-%d %H:%M')} UTC"
-    return f'{underlying} vol smile — {exchange} {expiry_label} @ {ts_label}'
+    ts_label = ts.strftime('%Y-%m-%d %H:%M')
+    return f'{underlying} vol smile {exchange} - {expiry_label}{period_part} @ {ts_label}'
 
 
 def plot_smile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
@@ -62,7 +64,7 @@ def plot_smile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
     ax.axvline(1.0, color='red', linestyle='--', linewidth=0.8)
     ax.set_xlabel('moneyness')
     ax.set_ylabel('mark IV')
-    ax.set_title(_smile_title(smile))
+    ax.set_title(_smile_title(smile), fontsize=10)
     ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
     ax.legend()
     fig.tight_layout()

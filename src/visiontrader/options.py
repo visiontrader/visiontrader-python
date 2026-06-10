@@ -20,6 +20,7 @@ SNAPSHOT_COLUMNS = [
     'exchange',
     'underlying',
     'expiry',
+    'settlement_period',
     'ts',
     'underlyingPrice',
     'symbol',
@@ -34,8 +35,6 @@ SNAPSHOT_COLUMNS = [
 ]
 OptionType = Literal['call', 'put']
 DEFAULT_EXCHANGE = 'deribit'
-DEFAULT_SMILE_MIN_MONEYNESS = 0.9
-DEFAULT_SMILE_MAX_MONEYNESS = 1.13
 
 
 def _coerce_date(value: date | str) -> date:
@@ -71,7 +70,24 @@ def _leg_moneyness(strike: float, underlying_price: float | None) -> float | Non
     return strike / underlying_price
 
 
-def _snapshot_to_dataframe(snapshot: OptionsSnapshot) -> pd.DataFrame:
+def _settlement_period_from_expiries(
+    expiries: pd.DataFrame,
+    expiry: date,
+) -> str | None:
+    matched = expiries.loc[expiries['expiry'] == expiry, 'settlement_period']
+    if matched.empty:
+        return None
+    value = matched.iloc[0]
+    if value is None or pd.isna(value):
+        return None
+    return str(value)
+
+
+def _snapshot_to_dataframe(
+    snapshot: OptionsSnapshot,
+    *,
+    settlement_period: str | None = None,
+) -> pd.DataFrame:
     if not snapshot.options:
         return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
     return pd.DataFrame(
@@ -80,6 +96,7 @@ def _snapshot_to_dataframe(snapshot: OptionsSnapshot) -> pd.DataFrame:
                 'exchange': snapshot.exchange,
                 'underlying': snapshot.underlying,
                 'expiry': snapshot.expiry,
+                'settlement_period': settlement_period,
                 'ts': snapshot.ts,
                 'underlyingPrice': snapshot.underlying_price,
                 'symbol': leg.symbol,
@@ -179,11 +196,15 @@ class VisionOptionsClient:
         exchange: str,
         instrument: str,
         expiry: date | str,
-    ) -> date:
+    ) -> tuple[date, str | None]:
         if isinstance(expiry, str) and is_expiry_alias(expiry):
             expiries = self.list_expiries(exchange, instrument, tradeable_only=True)
-            return resolve_expiry(expiry, expiries)
-        return _coerce_date(expiry)
+            resolved = resolve_expiry(expiry, expiries)
+            return resolved, _settlement_period_from_expiries(expiries, resolved)
+
+        resolved = _coerce_date(expiry)
+        expiries = self.list_expiries(exchange, instrument)
+        return resolved, _settlement_period_from_expiries(expiries, resolved)
 
     def get_snapshot(
         self,
@@ -202,11 +223,16 @@ class VisionOptionsClient:
         ``ts``: RFC3339 string, :class:`datetime.datetime`, or a relative offset
         such as ``-4m``, ``-1h``, ``-1d`` (UTC, backward only).
 
-        Columns: ``exchange``, ``underlying``, ``expiry``, ``ts``, ``underlyingPrice``,
-        then per-leg ``symbol``, ``strike``, ``moneyness``, ``type``, ``bid``, ``ask``,
-        ``markPrice``, ``markIv``, ``oi``. ``moneyness`` is ``strike / underlyingPrice``.
+        Columns: ``exchange``, ``underlying``, ``expiry``, ``settlement_period``, ``ts``,
+        ``underlyingPrice``, then per-leg ``symbol``, ``strike``, ``moneyness``, ``type``,
+        ``bid``, ``ask``, ``markPrice``, ``markIv``, ``oi``. ``moneyness`` is
+        ``strike / underlyingPrice``.
         """
-        resolved_expiry = self._resolve_snapshot_expiry(exchange, instrument, expiry)
+        resolved_expiry, settlement_period = self._resolve_snapshot_expiry(
+            exchange,
+            instrument,
+            expiry,
+        )
         resolved_ts = resolve_ts(ts)
         body = self._http.get_json(
             '/options/snapshot',
@@ -221,23 +247,30 @@ class VisionOptionsClient:
         raw = unwrap_data(body)
         if raw is None:
             raise SnapshotError('Empty snapshot data')
-        return _snapshot_to_dataframe(snapshot_from_json(raw))
+        return _snapshot_to_dataframe(
+            snapshot_from_json(raw),
+            settlement_period=settlement_period,
+        )
 
     def get_smile(
         self,
         snap: pd.DataFrame,
         option_type: OptionType,
-        min_moneyness: float = DEFAULT_SMILE_MIN_MONEYNESS,
-        max_moneyness: float = DEFAULT_SMILE_MAX_MONEYNESS,
+        min_moneyness: float | None = None,
+        max_moneyness: float | None = None,
     ) -> pd.DataFrame:
-        """Build a volatility smile DataFrame from a snapshot board."""
-        return (
-            snap.loc[snap['type'] == option_type]
-            .dropna(subset=['markIv'])
-            .loc[lambda df: df['moneyness'].between(min_moneyness, max_moneyness)]
-            .sort_values('moneyness')
-            .reset_index(drop=True)
-        )
+        """Build a volatility smile DataFrame from a snapshot board.
+
+        Filters by ``option_type`` and drops rows without ``markIv``. Moneyness
+        bounds are applied only when ``min_moneyness`` and/or ``max_moneyness``
+        are passed explicitly.
+        """
+        smile = snap.loc[snap['type'] == option_type].dropna(subset=['markIv'])
+        if min_moneyness is not None:
+            smile = smile.loc[smile['moneyness'] >= min_moneyness]
+        if max_moneyness is not None:
+            smile = smile.loc[smile['moneyness'] <= max_moneyness]
+        return smile.sort_values('moneyness').reset_index(drop=True)
 
     def get_snapshots(
         self,
