@@ -4,19 +4,57 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pandas as pd
+
 if TYPE_CHECKING:
-    import pandas as pd
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure
 
 
-def PlotSmile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
-    """Plot a volatility smile in a Jupyter notebook and return ``(fig, ax)``."""
+def _in_ipython() -> bool:
+    try:
+        from IPython import get_ipython
+
+        return get_ipython() is not None
+    except ImportError:
+        return False
+
+
+def _uses_inline_backend() -> bool:
+    import matplotlib
+
+    backend = matplotlib.get_backend().lower()
+    return 'inline' in backend or 'ipympl' in backend
+
+
+def _smile_title(smile: pd.DataFrame) -> str:
+    if smile.empty:
+        raise ValueError('smile DataFrame is empty')
+
+    row = smile.iloc[0]
+    underlying = row['underlying']
+    exchange = str(row['exchange']).capitalize()
+    expiry_label = str(row['symbol']).split('-')[1]
+    ts = pd.Timestamp(row['ts'])
+    if ts.tzinfo is not None:
+        ts = ts.tz_convert('UTC')
+    else:
+        ts = ts.tz_localize('UTC')
+    ts_label = f"{ts.strftime('%Y-%m-%d %H:%M')} UTC"
+    return f'{underlying} vol smile — {exchange} {expiry_label} @ {ts_label}'
+
+
+def plot_smile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
+    """Plot a volatility smile in a Jupyter notebook and return ``(fig, ax)``.
+
+    With the usual ``%matplotlib inline`` backend the figure is shown once at
+    cell end. In other environments ``display(fig)`` or ``plt.show()`` is used.
+    """
     try:
         import matplotlib.pyplot as plt
     except ImportError as exc:
         raise ImportError(
-            'PlotSmile requires matplotlib. Install with: pip install "visiontrader[plots]"',
+            'plot_smile requires matplotlib. Install with: pip install "visiontrader[plots]"',
         ) from exc
 
     fig, ax = plt.subplots(figsize=(8, 3.5))
@@ -24,15 +62,18 @@ def PlotSmile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
     ax.axvline(1.0, color='red', linestyle='--', linewidth=0.8)
     ax.set_xlabel('moneyness')
     ax.set_ylabel('mark IV')
+    ax.set_title(_smile_title(smile))
     ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
     ax.legend()
     fig.tight_layout()
 
-    try:
+    if _in_ipython() and _uses_inline_backend():
+        pass
+    elif _in_ipython():
         from IPython.display import display
 
         display(fig)
-    except ImportError:
+    else:
         plt.show()
 
     return fig, ax

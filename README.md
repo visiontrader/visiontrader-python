@@ -39,16 +39,22 @@ Requires a running VT.AspNetApp API and plotting extras:
 pip install -e ".[plots]"
 ```
 
+In Jupyter, enable inline plotting once (if your environment does not already):
+
+```python
+%matplotlib inline
+```
+
 In [1]:
 
 ```python
 from visiontrader import VisionOptionsClient
-from visiontrader.plots import PlotSmile
+from visiontrader.plots import plot_smile
 
 vt = VisionOptionsClient()
 snap = vt.get_snapshot(instrument="BTC", expiry="next_daily", ts="-4m")
 smile = vt.get_smile(snap, 'call')
-PlotSmile(smile)
+plot_smile(smile)
 ```
 
 ## Tutorial
@@ -247,7 +253,7 @@ plt.show()
 | `get_smile(snap, type, min=0.9, max=1.13)` | snapshot → smile DataFrame |
 | `get_snapshots(..., on_date=...)` | `GET /options/snapshots` |
 | `snapshots_to_dataframe(...)` | `GET /options/snapshots` → DataFrame |
-| `PlotSmile(smile)` | vol smile plot → `(fig, ax)` (`visiontrader.plots`) |
+| `plot_smile(smile)` | vol smile plot → `(fig, ax)` (`visiontrader.plots`) |
 
 Query parameter for the board instrument is **`instrument`**.
 

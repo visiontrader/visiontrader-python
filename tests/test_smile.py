@@ -8,7 +8,7 @@ import pytest
 matplotlib.use('Agg')
 
 from visiontrader import VisionOptionsClient
-from visiontrader.plots import PlotSmile
+from visiontrader.plots import plot_smile
 
 
 def _sample_snapshot() -> pd.DataFrame:
@@ -64,11 +64,31 @@ def test_get_smile_includes_boundary_moneyness() -> None:
     assert smile.iloc[1]['moneyness'] == 1.13
 
 
+def _plot_smile_sample() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            'underlying': ['BTC', 'BTC', 'BTC'],
+            'exchange': ['deribit', 'deribit', 'deribit'],
+            'symbol': ['BTC-4JUN26-67000-C', 'BTC-4JUN26-67000-C', 'BTC-4JUN26-67000-C'],
+            'ts': [pd.Timestamp('2026-06-03 12:00:00+00:00')] * 3,
+            'moneyness': [0.95, 1.0, 1.05],
+            'markIv': [0.5, 0.48, 0.46],
+        }
+    )
+
+
 def test_plot_smile_returns_fig_and_ax() -> None:
-    smile = pd.DataFrame({'moneyness': [0.95, 1.0, 1.05], 'markIv': [0.5, 0.48, 0.46]})
-    fig, ax = PlotSmile(smile)
+    fig, ax = plot_smile(_plot_smile_sample())
     assert fig is not None
     assert ax is not None
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
+
+
+def test_plot_smile_title() -> None:
+    fig, ax = plot_smile(_plot_smile_sample())
+    assert ax.get_title() == 'BTC vol smile — Deribit 4JUN26 @ 2026-06-03 12:00 UTC'
     import matplotlib.pyplot as plt
 
     plt.close(fig)
