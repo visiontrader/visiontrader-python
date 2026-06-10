@@ -273,6 +273,7 @@ class VisionOptionsClient:
             if underlying_price == 0:
                 raise ValueError('underlying_price must not be zero')
             smile['moneyness'] = smile['strike'] / underlying_price
+            smile['moneynessUnderlyingPrice'] = underlying_price
         if min_moneyness is not None:
             smile = smile.loc[smile['moneyness'] >= min_moneyness]
         if max_moneyness is not None:

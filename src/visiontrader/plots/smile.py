@@ -27,7 +27,11 @@ def _uses_inline_backend() -> bool:
     return 'inline' in backend or 'ipympl' in backend
 
 
-def _smile_title(smile: pd.DataFrame) -> str:
+def _format_underlying_px(value: float) -> str:
+    return f'{round(value):,}'.replace(',', ' ')
+
+
+def _smile_title_parts(smile: pd.DataFrame) -> tuple[str, str]:
     if smile.empty:
         raise ValueError('smile DataFrame is empty')
 
@@ -35,21 +39,44 @@ def _smile_title(smile: pd.DataFrame) -> str:
     underlying = row['underlying']
     exchange = str(row['exchange']).capitalize()
     expiry_label = str(row['symbol']).split('-')[1]
-    meta: list[str] = []
-    period = row.get('settlement_period')
-    if period is not None and not pd.isna(period):
-        meta.append(str(period))
-    option_type = row.get('type')
-    if option_type is not None and not pd.isna(option_type):
-        meta.append(str(option_type))
-    meta_part = f' [{", ".join(meta)}]' if meta else ''
     ts = pd.Timestamp(row['ts'])
     if ts.tzinfo is not None:
         ts = ts.tz_convert('UTC')
     else:
         ts = ts.tz_localize('UTC')
     ts_label = ts.strftime('%Y-%m-%d %H:%M')
-    return f'{underlying} vol smile {exchange} - {expiry_label}{meta_part} @ {ts_label}'
+    main = f'{underlying} vol smile {exchange} - {expiry_label} @ {ts_label}'
+
+    subtitle_parts: list[str] = []
+    period = row.get('settlement_period')
+    if period is not None and not pd.isna(period):
+        subtitle_parts.append(f'period = {period}')
+    option_type = row.get('type')
+    if option_type is not None and not pd.isna(option_type):
+        subtitle_parts.append(f'type = {option_type}')
+    if 'moneynessUnderlyingPrice' in smile.columns:
+        px = row['moneynessUnderlyingPrice']
+    else:
+        px = row.get('underlyingPrice')
+    if px is not None and not pd.isna(px):
+        subtitle_parts.append(f'underlying px = {_format_underlying_px(float(px))}')
+    subtitle = f'[{", ".join(subtitle_parts)}]'
+    return main, subtitle
+
+
+def _set_smile_titles(ax: Axes, smile: pd.DataFrame) -> None:
+    main, subtitle = _smile_title_parts(smile)
+    ax.text(0.5, 1.08, main, transform=ax.transAxes, ha='center', va='bottom', fontsize=11)
+    ax.text(
+        0.5,
+        1.01,
+        subtitle,
+        transform=ax.transAxes,
+        ha='center',
+        va='bottom',
+        fontsize=8,
+        color='#555555',
+    )
 
 
 def plot_smile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
@@ -70,10 +97,11 @@ def plot_smile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
     ax.axvline(1.0, color='red', linestyle='--', linewidth=0.8)
     ax.set_xlabel('moneyness')
     ax.set_ylabel('mark IV')
-    ax.set_title(_smile_title(smile), fontsize=10)
     ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
     ax.legend()
     fig.tight_layout()
+    fig.subplots_adjust(top=0.78)
+    _set_smile_titles(ax, smile)
 
     if _in_ipython() and _uses_inline_backend():
         pass

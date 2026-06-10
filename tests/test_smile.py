@@ -9,6 +9,7 @@ matplotlib.use('Agg')
 
 from visiontrader import VisionOptionsClient
 from visiontrader.plots import plot_smile
+from visiontrader.plots.smile import _smile_title_parts
 
 
 def _sample_snapshot() -> pd.DataFrame:
@@ -87,6 +88,7 @@ def _plot_smile_sample() -> pd.DataFrame:
             'symbol': ['BTC-4JUN26-67000-C', 'BTC-4JUN26-67000-C', 'BTC-4JUN26-67000-C'],
             'settlement_period': ['month', 'month', 'month'],
             'type': ['call', 'call', 'call'],
+            'underlyingPrice': [66948.82, 66948.82, 66948.82],
             'ts': [pd.Timestamp('2026-06-03 12:00:00+00:00')] * 3,
             'moneyness': [0.95, 1.0, 1.05],
             'markIv': [0.5, 0.48, 0.46],
@@ -103,12 +105,34 @@ def test_plot_smile_returns_fig_and_ax() -> None:
     plt.close(fig)
 
 
-def test_plot_smile_title() -> None:
-    fig, ax = plot_smile(_plot_smile_sample())
-    assert ax.get_title() == 'BTC vol smile Deribit - 4JUN26 [month, call] @ 2026-06-03 12:00'
-    import matplotlib.pyplot as plt
+def test_smile_title_parts() -> None:
+    main, subtitle = _smile_title_parts(_plot_smile_sample())
+    assert main == 'BTC vol smile Deribit - 4JUN26 @ 2026-06-03 12:00'
+    assert subtitle == '[period = month, type = call, underlying px = 66 949]'
 
-    plt.close(fig)
+
+def test_smile_title_parts_uses_custom_underlying_price() -> None:
+    smile = _client().get_smile(
+        pd.DataFrame(
+            {
+                'underlying': ['BTC'],
+                'exchange': ['deribit'],
+                'symbol': ['BTC-4JUN26-67000-C'],
+                'settlement_period': ['day'],
+                'type': ['call'],
+                'underlyingPrice': [66948.82],
+                'strike': [67000],
+                'moneyness': [1.0],
+                'ts': [pd.Timestamp('2026-06-10 16:08:00+00:00')],
+                'markIv': [0.5],
+            }
+        ),
+        'call',
+        underlying_price=66000,
+    )
+    main, subtitle = _smile_title_parts(smile)
+    assert main == 'BTC vol smile Deribit - 4JUN26 @ 2026-06-10 16:08'
+    assert subtitle == '[period = day, type = call, underlying px = 66 000]'
 
 
 def test_get_snapshot_uses_instrument_query_param() -> None:
