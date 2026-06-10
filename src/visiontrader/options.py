@@ -258,14 +258,21 @@ class VisionOptionsClient:
         option_type: OptionType,
         min_moneyness: float | None = None,
         max_moneyness: float | None = None,
+        *,
+        underlying_price: float | None = None,
     ) -> pd.DataFrame:
         """Build a volatility smile DataFrame from a snapshot board.
 
         Filters by ``option_type`` and drops rows without ``markIv``. Moneyness
         bounds are applied only when ``min_moneyness`` and/or ``max_moneyness``
-        are passed explicitly.
+        are passed explicitly. When ``underlying_price`` is set, ``moneyness`` is
+        recomputed as ``strike / underlying_price`` instead of the snapshot value.
         """
-        smile = snap.loc[snap['type'] == option_type].dropna(subset=['markIv'])
+        smile = snap.loc[snap['type'] == option_type].dropna(subset=['markIv']).copy()
+        if underlying_price is not None:
+            if underlying_price == 0:
+                raise ValueError('underlying_price must not be zero')
+            smile['moneyness'] = smile['strike'] / underlying_price
         if min_moneyness is not None:
             smile = smile.loc[smile['moneyness'] >= min_moneyness]
         if max_moneyness is not None:

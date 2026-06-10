@@ -35,15 +35,21 @@ def _smile_title(smile: pd.DataFrame) -> str:
     underlying = row['underlying']
     exchange = str(row['exchange']).capitalize()
     expiry_label = str(row['symbol']).split('-')[1]
+    meta: list[str] = []
     period = row.get('settlement_period')
-    period_part = f' [{period}]' if period is not None and not pd.isna(period) else ''
+    if period is not None and not pd.isna(period):
+        meta.append(str(period))
+    option_type = row.get('type')
+    if option_type is not None and not pd.isna(option_type):
+        meta.append(str(option_type))
+    meta_part = f' [{", ".join(meta)}]' if meta else ''
     ts = pd.Timestamp(row['ts'])
     if ts.tzinfo is not None:
         ts = ts.tz_convert('UTC')
     else:
         ts = ts.tz_localize('UTC')
     ts_label = ts.strftime('%Y-%m-%d %H:%M')
-    return f'{underlying} vol smile {exchange} - {expiry_label}{period_part} @ {ts_label}'
+    return f'{underlying} vol smile {exchange} - {expiry_label}{meta_part} @ {ts_label}'
 
 
 def plot_smile(smile: pd.DataFrame) -> tuple[Figure, Axes]:

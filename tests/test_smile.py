@@ -48,6 +48,21 @@ def test_get_smile_without_bounds_returns_all_legs() -> None:
     assert list(smile['moneyness']) == [0.89, 1.0, 1.14]
 
 
+def test_get_smile_recomputes_moneyness_with_underlying_price() -> None:
+    snap = pd.DataFrame(
+        {
+            'strike': [66000, 67000],
+            'moneyness': [0.98, 1.0],
+            'underlyingPrice': [67346.0, 67346.0],
+            'type': ['call', 'call'],
+            'markIv': [0.5, 0.48],
+        }
+    )
+    smile = _client().get_smile(snap, 'call', underlying_price=66000)
+    assert smile.iloc[0]['moneyness'] == pytest.approx(1.0)
+    assert smile.iloc[1]['moneyness'] == pytest.approx(67000 / 66000)
+
+
 def test_get_smile_includes_boundary_moneyness() -> None:
     snap = pd.DataFrame(
         {
@@ -71,6 +86,7 @@ def _plot_smile_sample() -> pd.DataFrame:
             'exchange': ['deribit', 'deribit', 'deribit'],
             'symbol': ['BTC-4JUN26-67000-C', 'BTC-4JUN26-67000-C', 'BTC-4JUN26-67000-C'],
             'settlement_period': ['month', 'month', 'month'],
+            'type': ['call', 'call', 'call'],
             'ts': [pd.Timestamp('2026-06-03 12:00:00+00:00')] * 3,
             'moneyness': [0.95, 1.0, 1.05],
             'markIv': [0.5, 0.48, 0.46],
@@ -89,7 +105,7 @@ def test_plot_smile_returns_fig_and_ax() -> None:
 
 def test_plot_smile_title() -> None:
     fig, ax = plot_smile(_plot_smile_sample())
-    assert ax.get_title() == 'BTC vol smile Deribit - 4JUN26 [month] @ 2026-06-03 12:00'
+    assert ax.get_title() == 'BTC vol smile Deribit - 4JUN26 [month, call] @ 2026-06-03 12:00'
     import matplotlib.pyplot as plt
 
     plt.close(fig)

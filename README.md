@@ -250,7 +250,7 @@ plt.show()
 | `list_expiries(exchange, instrument, tradeable_only=...)` | `GET options/expiries` → DataFrame |
 | `list_dates(exchange, instrument, expiry)` | `GET options/dates` → DataFrame |
 | `get_snapshot(...)` | `GET /options/snapshot` → DataFrame |
-| `get_smile(snap, type, min_moneyness=..., max_moneyness=...)` | snapshot → smile DataFrame |
+| `get_smile(snap, type, min_moneyness=..., max_moneyness=..., underlying_price=...)` | snapshot → smile DataFrame |
 | `get_snapshots(..., on_date=...)` | `GET /options/snapshots` |
 | `snapshots_to_dataframe(...)` | `GET /options/snapshots` → DataFrame |
 | `plot_smile(smile)` | vol smile plot → `(fig, ax)` (`visiontrader.plots`) |
