@@ -136,12 +136,25 @@ class VisionOptionsClient:
         )
         return list(unwrap_data(body))
 
-    def list_expiries(self, exchange: str, instrument: str) -> pd.DataFrame:
-        """GET options/expiries — columns: ``expiry``, ``settlement_period``."""
-        body = self._http.get_json(
-            'options/expiries',
-            params={'exchange': exchange, 'instrument': instrument},
-        )
+    def list_expiries(
+        self,
+        exchange: str,
+        instrument: str,
+        *,
+        tradeable_only: bool | None = None,
+    ) -> pd.DataFrame:
+        """GET options/expiries — columns: ``expiry``, ``settlement_period``.
+
+        ``tradeable_only``: when set, passes ``tradeableOnly`` to the API to return
+        only boards that are still tradeable.
+        """
+        params: dict[str, str | bool] = {
+            'exchange': exchange,
+            'instrument': instrument,
+        }
+        if tradeable_only is not None:
+            params['tradeableOnly'] = tradeable_only
+        body = self._http.get_json('options/expiries', params=params)
         items = [expiry_from_json(item) for item in unwrap_data(body)]
         return pd.DataFrame(
             [{'expiry': e.expiry, 'settlement_period': e.settlement_period} for e in items],
@@ -168,7 +181,7 @@ class VisionOptionsClient:
         expiry: date | str,
     ) -> date:
         if isinstance(expiry, str) and is_expiry_alias(expiry):
-            expiries = self.list_expiries(exchange, instrument)
+            expiries = self.list_expiries(exchange, instrument, tradeable_only=True)
             return resolve_expiry(expiry, expiries)
         return _coerce_date(expiry)
 

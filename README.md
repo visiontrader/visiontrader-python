@@ -241,7 +241,7 @@ plt.show()
 |--------|------|
 | `list_exchanges()` | `GET /exchanges?type=options` |
 | `list_instruments(exchange)` | `GET options/instruments` |
-| `list_expiries(exchange, instrument)` | `GET options/expiries` → DataFrame |
+| `list_expiries(exchange, instrument, tradeable_only=...)` | `GET options/expiries` → DataFrame |
 | `list_dates(exchange, instrument, expiry)` | `GET options/dates` → DataFrame |
 | `get_snapshot(...)` | `GET /options/snapshot` → DataFrame |
 | `get_smile(snap, type, min=0.9, max=1.13)` | snapshot → smile DataFrame |

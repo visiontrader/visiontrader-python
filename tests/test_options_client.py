@@ -129,9 +129,11 @@ def test_get_snapshot_string_args() -> None:
 
 def test_get_snapshot_resolves_next_daily() -> None:
     seen: dict[str, str] = {}
+    expiry_params: dict[str, str] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith('/expiries'):
+            expiry_params.update(dict(request.url.params))
             return httpx.Response(
                 200,
                 json={
@@ -167,6 +169,7 @@ def test_get_snapshot_resolves_next_daily() -> None:
             client.get_snapshot('BTC', 'next_daily', '-4m')
     assert seen['expiry'] == '2026-06-10'
     assert seen['instrument'] == 'BTC'
+    assert expiry_params['tradeableOnly'] == 'true'
 
 
 def test_validation_error() -> None:
@@ -192,6 +195,40 @@ def test_response_error_in_body() -> None:
         with pytest.raises(ApiError, match='snapshot not found') as exc_info:
             vision_options.list_exchanges()
         assert exc_info.value.code == -2
+
+
+def test_list_expiries_tradeable_only_param() -> None:
+    seen: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith('/expiries'):
+            seen.append(dict(request.url.params))
+            return httpx.Response(
+                200,
+                json={'data': [{'expiry': '2026-05-01', 'settlement_period': 'day'}]},
+            )
+        return httpx.Response(404)
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    with VisionOptionsClient(client=http) as vision_options:
+        vision_options.list_expiries('deribit', 'BTC')
+        vision_options.list_expiries('deribit', 'BTC', tradeable_only=True)
+        vision_options.list_expiries('deribit', 'BTC', tradeable_only=False)
+
+    assert 'tradeableOnly' not in seen[0]
+    assert seen[1]['tradeableOnly'] == 'true'
+    assert seen[2]['tradeableOnly'] == 'false'
+
+
+def test_non_json_response_includes_request_url() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, text='')
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    with VisionOptionsClient(client=http) as vision_options:
+        with pytest.raises(ApiError, match=r'GET .*/options/expiries.*\(empty body\)') as exc_info:
+            vision_options.list_expiries('deribit', 'BTC')
+        assert exc_info.value.status_code == 400
 
 
 def test_missing_data_field() -> None:

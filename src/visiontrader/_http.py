@@ -44,12 +44,23 @@ class HttpClient:
         return _parse_response(response)
 
 
+def _response_preview(response: httpx.Response, *, limit: int = 300) -> str:
+    text = response.text.strip()
+    if not text:
+        return '(empty body)'
+    if len(text) <= limit:
+        return text
+    return f'{text[:limit]}...'
+
+
 def _parse_response(response: httpx.Response) -> dict[str, Any]:
     try:
         body: dict[str, Any] = response.json()
     except ValueError as exc:
+        request = response.request
         raise ApiError(
-            f'Non-JSON response (HTTP {response.status_code})',
+            f'Non-JSON response (HTTP {response.status_code}) from '
+            f'{request.method} {request.url}: {_response_preview(response)}',
             status_code=response.status_code,
         ) from exc
 
