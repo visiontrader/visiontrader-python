@@ -107,7 +107,7 @@ def test_plot_smile_returns_fig_and_ax() -> None:
 
 def test_plot_smile_watermark() -> None:
     fig, _ = plot_smile(_plot_smile_sample())
-    watermark = [text for text in fig.texts if text.get_text() == 'visiontrader.io']
+    watermark = [text for text in fig.texts if text.get_text() == 'www.visiontrader.io']
     assert len(watermark) == 1
     assert watermark[0].get_fontsize() == 8
     assert watermark[0].get_alpha() == 0.6

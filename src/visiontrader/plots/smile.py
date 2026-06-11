@@ -16,14 +16,15 @@ WithMetricsInput = str | Sequence[str]
 
 SMILE_METRICS: frozenset[str] = frozenset({'oi', 'spread', 'askbid'})
 PANEL_METRICS: frozenset[str] = frozenset({'oi', 'spread'})
-BID_POINT_COLOR = '#6a8caf'
-ASK_POINT_COLOR = '#c27b7b'
-POINT_SIZE = 14
+BID_POINT_COLOR = '#357FD3'
+ASK_POINT_COLOR = '#E63232'
+POINT_SIZE = 3
+MAIN_LEGEND_FONTSIZE = 20 / 3  # ~1.5× smaller than matplotlib default legend (~10pt)
 FIG_WIDTH = 8.0
 MAIN_PANEL_HEIGHT = 3.5
 METRIC_PANEL_HEIGHT = 1.0
 
-WATERMARK_TEXT = 'visiontrader.io'
+WATERMARK_TEXT = 'www.visiontrader.io'
 WATERMARK_FONTSIZE = 8
 WATERMARK_COLOR = 'gray'
 WATERMARK_ALPHA = 0.6
@@ -188,7 +189,7 @@ def _plot_smile_main(ax: Axes, smile: pd.DataFrame, *, show_xlabel: bool, show_a
         ax.set_xlabel('moneyness')
     ax.set_ylabel('mark IV')
     ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
-    ax.legend()
+    ax.legend(prop={'size': MAIN_LEGEND_FONTSIZE, 'weight': 'bold'})
 
 
 def _plot_oi_metric(ax: Axes, smile: pd.DataFrame) -> None:
