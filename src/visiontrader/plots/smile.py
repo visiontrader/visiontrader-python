@@ -65,9 +65,9 @@ def _smile_title_parts(smile: pd.DataFrame) -> tuple[str, str]:
 
 
 WATERMARK_TEXT = 'visiontrader.io'
-WATERMARK_FONTSIZE = 7
-WATERMARK_COLOR = '#8cb4d9'
-WATERMARK_ALPHA = 0.35
+WATERMARK_FONTSIZE = 8
+WATERMARK_COLOR = 'gray'
+WATERMARK_ALPHA = 0.6
 
 
 def _set_smile_watermark(ax: Axes) -> None:
@@ -112,7 +112,7 @@ def plot_smile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
             'plot_smile requires matplotlib. Install with: pip install "visiontrader[plots]"',
         ) from exc
 
-    fig, ax = plt.subplots(figsize=(8, 3.5))
+    fig, ax = plt.subplots(figsize=(8, 4.55))
     ax.plot(smile['moneyness'], smile['markIv'], 'o-', label='mark IV', markersize=4)
     ax.axvline(1.0, color='red', linestyle='--', linewidth=0.8)
     ax.set_xlabel('moneyness')

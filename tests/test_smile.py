@@ -109,8 +109,9 @@ def test_plot_smile_watermark() -> None:
     _, ax = plot_smile(_plot_smile_sample())
     watermark = [t for t in ax.texts if t.get_text() == 'visiontrader.io']
     assert len(watermark) == 1
-    assert watermark[0].get_fontsize() == 7
-    assert watermark[0].get_alpha() == 0.35
+    assert watermark[0].get_fontsize() == 8
+    assert watermark[0].get_alpha() == 0.6
+    assert watermark[0].get_color() == 'gray'
     import matplotlib.pyplot as plt
 
     plt.close(ax.figure)
