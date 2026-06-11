@@ -124,11 +124,14 @@ def test_parse_with_metrics_supports_list_and_sugar() -> None:
     assert parse_with_metrics(['oi', 'spread']) == ['oi', 'spread']
 
 
-def test_parse_with_metrics_rejects_unknown_and_askbid() -> None:
+def test_parse_with_metrics_rejects_unknown() -> None:
     with pytest.raises(ValueError, match='Unknown smile metric'):
         parse_with_metrics('volume')
-    with pytest.raises(NotImplementedError, match='askbid'):
-        parse_with_metrics('askbid')
+
+
+def test_parse_with_metrics_supports_askbid() -> None:
+    assert parse_with_metrics(['askbid', 'oi']) == ['askbid', 'oi']
+    assert parse_with_metrics('askbid|spread') == ['askbid', 'spread']
 
 
 def _plot_smile_metrics_sample() -> pd.DataFrame:
@@ -143,11 +146,36 @@ def _plot_smile_metrics_sample() -> pd.DataFrame:
             'ts': [pd.Timestamp('2026-06-03 12:00:00+00:00')] * 3,
             'moneyness': [0.95, 1.0, 1.05],
             'markIv': [0.5, 0.48, 0.46],
+            'markPrice': [0.075, 0.052, 0.055],
             'oi': [10.0, None, 30.0],
             'bid': [0.07, 0.05, None],
             'ask': [0.08, None, 0.06],
         }
     )
+
+
+def test_scaled_quote_iv() -> None:
+    from visiontrader.plots.smile import _scaled_quote_iv
+
+    result = _scaled_quote_iv(
+        pd.Series([0.1575]),
+        pd.Series([0.14]),
+        pd.Series([0.7024]),
+    )
+    assert result.iloc[0] == pytest.approx(0.7902, rel=1e-4)
+
+
+def test_plot_smile_askbid_overlay() -> None:
+    smile = _plot_smile_metrics_sample()
+    fig, ax = plot_smile(smile, with_metrics='askbid')
+    labels = [line.get_label() for line in ax.get_lines()]
+    assert 'mark IV' in labels
+    collection_labels = [collection.get_label() for collection in ax.collections]
+    assert 'bid IV (scaled)' in collection_labels
+    assert 'ask IV (scaled)' in collection_labels
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
 
 
 def test_plot_smile_with_metrics_creates_panels() -> None:

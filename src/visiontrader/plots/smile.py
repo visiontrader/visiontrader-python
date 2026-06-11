@@ -16,6 +16,9 @@ WithMetricsInput = str | Sequence[str]
 
 SMILE_METRICS: frozenset[str] = frozenset({'oi', 'spread', 'askbid'})
 PANEL_METRICS: frozenset[str] = frozenset({'oi', 'spread'})
+BID_POINT_COLOR = '#6a8caf'
+ASK_POINT_COLOR = '#c27b7b'
+POINT_SIZE = 14
 FIG_WIDTH = 8.0
 MAIN_PANEL_HEIGHT = 3.5
 METRIC_PANEL_HEIGHT = 1.0
@@ -43,7 +46,7 @@ def _uses_inline_backend() -> bool:
 
 
 def parse_with_metrics(value: WithMetricsInput | None) -> list[str]:
-    """Normalize ``with_metrics`` input to an ordered list of panel metric names."""
+    """Normalize ``with_metrics`` input to an ordered list of metric names."""
     if value is None:
         return []
 
@@ -62,10 +65,6 @@ def parse_with_metrics(value: WithMetricsInput | None) -> list[str]:
             raise ValueError('with_metrics contains an empty metric name')
         if metric not in SMILE_METRICS:
             raise ValueError(f'Unknown smile metric: {item!r}')
-        if metric == 'askbid':
-            raise NotImplementedError('askbid metric is not implemented yet')
-        if metric not in PANEL_METRICS:
-            raise ValueError(f'Metric {item!r} cannot be rendered as a panel yet')
         if metric in metrics:
             raise ValueError(f'Duplicate smile metric: {item!r}')
         metrics.append(metric)
@@ -138,6 +137,41 @@ def _set_figure_watermark(fig: Figure) -> None:
     )
 
 
+def _scaled_quote_iv(price: pd.Series, mark_price: pd.Series, mark_iv: pd.Series) -> pd.Series:
+    return price * mark_iv / mark_price
+
+
+def _plot_askbid_overlay(ax: Axes, smile: pd.DataFrame) -> None:
+    base = smile.dropna(subset=['markPrice', 'markIv'])
+    base = base[base['markPrice'] != 0]
+
+    bid = base.dropna(subset=['bid'])
+    if not bid.empty:
+        bid_iv = _scaled_quote_iv(bid['bid'], bid['markPrice'], bid['markIv'])
+        ax.scatter(
+            bid['moneyness'],
+            bid_iv,
+            s=POINT_SIZE,
+            color=BID_POINT_COLOR,
+            alpha=0.8,
+            label='bid IV (scaled)',
+            zorder=3,
+        )
+
+    ask = base.dropna(subset=['ask'])
+    if not ask.empty:
+        ask_iv = _scaled_quote_iv(ask['ask'], ask['markPrice'], ask['markIv'])
+        ax.scatter(
+            ask['moneyness'],
+            ask_iv,
+            s=POINT_SIZE,
+            color=ASK_POINT_COLOR,
+            alpha=0.8,
+            label='ask IV (scaled)',
+            zorder=3,
+        )
+
+
 def _metric_bar_width(moneyness: pd.Series) -> float:
     values = pd.Series(moneyness.dropna().unique()).sort_values()
     if len(values) < 2:
@@ -145,8 +179,10 @@ def _metric_bar_width(moneyness: pd.Series) -> float:
     return float(values.diff().dropna().min()) * 0.8
 
 
-def _plot_smile_main(ax: Axes, smile: pd.DataFrame, *, show_xlabel: bool) -> None:
+def _plot_smile_main(ax: Axes, smile: pd.DataFrame, *, show_xlabel: bool, show_askbid: bool) -> None:
     ax.plot(smile['moneyness'], smile['markIv'], 'o-', label='mark IV', markersize=4)
+    if show_askbid:
+        _plot_askbid_overlay(ax, smile)
     ax.axvline(1.0, color='red', linestyle='--', linewidth=0.8)
     if show_xlabel:
         ax.set_xlabel('moneyness')
@@ -206,9 +242,10 @@ def plot_smile(
 ) -> tuple[Figure, Axes] | tuple[Figure, list[Axes]]:
     """Plot a volatility smile in a Jupyter notebook.
 
-    ``with_metrics`` accepts ``'oi'``, ``['oi']``, ``['oi', 'spread']``, or sugar
-    syntax ``'oi|spread'``. Each metric adds a bar-chart panel below the smile.
-    Returns ``(fig, ax)`` or ``(fig, axes)`` when metric panels are present.
+    ``with_metrics`` accepts ``'oi'``, ``['oi', 'spread']``, ``'oi|askbid'``, and
+    similar forms. ``oi`` and ``spread`` add bar-chart panels below the smile;
+    ``askbid`` overlays bid/ask IV points on the main chart. Returns ``(fig, ax)``
+    or ``(fig, axes)`` when panel metrics are present.
     """
     try:
         import matplotlib.pyplot as plt
@@ -218,7 +255,9 @@ def plot_smile(
         ) from exc
 
     metrics = parse_with_metrics(with_metrics)
-    panel_count = len(metrics)
+    panel_metrics = [metric for metric in metrics if metric in PANEL_METRICS]
+    show_askbid = 'askbid' in metrics
+    panel_count = len(panel_metrics)
 
     if panel_count == 0:
         fig, ax = plt.subplots(figsize=(FIG_WIDTH, MAIN_PANEL_HEIGHT))
@@ -235,9 +274,9 @@ def plot_smile(
         axes = list(axes)
 
     main_ax = axes[0]
-    _plot_smile_main(main_ax, smile, show_xlabel=panel_count == 0)
+    _plot_smile_main(main_ax, smile, show_xlabel=panel_count == 0, show_askbid=show_askbid)
 
-    for metric_ax, metric in zip(axes[1:], metrics, strict=True):
+    for metric_ax, metric in zip(axes[1:], panel_metrics, strict=True):
         _plot_metric_panel(metric_ax, smile, metric)
 
     if panel_count > 0:
