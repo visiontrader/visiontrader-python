@@ -105,6 +105,17 @@ def test_plot_smile_returns_fig_and_ax() -> None:
     plt.close(fig)
 
 
+def test_plot_smile_watermark() -> None:
+    _, ax = plot_smile(_plot_smile_sample())
+    watermark = [t for t in ax.texts if t.get_text() == 'visiontrader.io']
+    assert len(watermark) == 1
+    assert watermark[0].get_fontsize() == 7
+    assert watermark[0].get_alpha() == 0.35
+    import matplotlib.pyplot as plt
+
+    plt.close(ax.figure)
+
+
 def test_smile_title_parts() -> None:
     main, subtitle = _smile_title_parts(_plot_smile_sample())
     assert main == 'BTC vol smile Deribit - 4JUN26 @ 2026-06-03 12:00'

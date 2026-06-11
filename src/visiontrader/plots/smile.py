@@ -64,6 +64,26 @@ def _smile_title_parts(smile: pd.DataFrame) -> tuple[str, str]:
     return main, subtitle
 
 
+WATERMARK_TEXT = 'visiontrader.io'
+WATERMARK_FONTSIZE = 7
+WATERMARK_COLOR = '#8cb4d9'
+WATERMARK_ALPHA = 0.35
+
+
+def _set_smile_watermark(ax: Axes) -> None:
+    ax.text(
+        0.99,
+        0.01,
+        WATERMARK_TEXT,
+        transform=ax.transAxes,
+        ha='right',
+        va='bottom',
+        fontsize=WATERMARK_FONTSIZE,
+        color=WATERMARK_COLOR,
+        alpha=WATERMARK_ALPHA,
+    )
+
+
 def _set_smile_titles(ax: Axes, smile: pd.DataFrame) -> None:
     main, subtitle = _smile_title_parts(smile)
     ax.text(0.5, 1.08, main, transform=ax.transAxes, ha='center', va='bottom', fontsize=11)
@@ -102,6 +122,7 @@ def plot_smile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
     fig.tight_layout()
     fig.subplots_adjust(top=0.78)
     _set_smile_titles(ax, smile)
+    _set_smile_watermark(ax)
 
     if _in_ipython() and _uses_inline_backend():
         pass
