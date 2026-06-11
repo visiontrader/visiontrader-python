@@ -45,17 +45,57 @@ In Jupyter, enable inline plotting once (if your environment does not already):
 %matplotlib inline
 ```
 
+**Import the SDK and create the options client.**
+
 In [1]:
 
 ```python
+import pandas as pd
 from visiontrader import VisionOptionsClient
 from visiontrader.plots import plot_smile
 
 vt = VisionOptionsClient()
-snap = vt.get_snapshot(instrument="BTC", expiry="next_daily", ts="-4m")
-smile = vt.filter_for_smile(snap, 'call')
+```
+
+**Fetch a snapshot of the options board.** See the [Tutorial](#alternative-snapshot-arguments-expiry-aliases-and-relative-timestamps) for how `next_*` expiry aliases and relative `ts` work.
+
+In [2]:
+
+```python
+snap = vt.get_snapshot(exchange='deribit', instrument="BTC", expiry="next_weekly", ts="-5m")
+plot_smile(snap)
+```
+
+![BTC vol smile Deribit - 12JUN26 @ 2026-06-11 12:05](docs/images/quick_vol_smile_snap.png)
+
+<br>
+
+**Filter the snapshot for a put smile:**
+
+1. Keep only `put` options.
+2. Recompute moneyness from a custom underlying price (`underlying_price=64000`).
+3. Trim the smile wings by moneyness (`min_moneyness=0.88`, `max_moneyness=1.09`).
+
+In [3]:
+
+```python
+smile = vt.filter_for_smile(snap, 'put', underlying_price=64000, min_moneyness=0.88, max_moneyness=1.09)
 plot_smile(smile)
 ```
+
+![BTC vol smile Deribit - 12JUN26 @ 2026-06-11 12:05 (put)](docs/images/quick_vol_smile_filtered.png)
+
+<br>
+
+**Add open interest, spread, and ask/bid levels** — `oi` and `spread` panels below the smile, plus `askbid` markers on the main chart (ask/bid IV via naive scaling from mark price).
+
+In [4]:
+
+```python
+plot_smile(smile, with_metrics=['oi', 'spread', 'askbid'])
+```
+
+![BTC vol smile Deribit - 12JUN26 @ 2026-06-11 12:05 (put, OI, spread, askbid)](docs/images/quick_vol_smile_filtered_askbid.png)
 
 ## Tutorial
 
@@ -184,9 +224,34 @@ snap.head(6)
 ```
 <br>
 
-**Filter by moneyness** to see how far each leg is from at-the-money (`moneyness ≈ 1.0`). The column is computed in the SDK — filter by moneyness, not by absolute strikes, to keep only legs near ATM on any board.
+### Alternative snapshot arguments (expiry aliases and relative timestamps)
+
+Besides explicit dates and RFC3339 times, `get_snapshot` accepts semantic shortcuts — the same style as in the Quickstart.
+
+**Fetch the nearest weekly options board on Deribit.** In `next_weekly`, `next` picks the closest tradeable expiry and `weekly` restricts it to the week settlement period.
+
+Supported expiry aliases:
+
+- `next_daily` — daily board with the nearest expiration
+- `next_weekly` — weekly board with the nearest expiration
+- `next_monthly` — monthly board with the nearest expiration
+- `next_quarterly` — quarterly board with the nearest expiration
+
+Each alias is resolved from `list_expiries`: the SDK looks for the nearest expiry on or after tomorrow (UTC) with the matching `settlement_period` (`day`, `week`, `month`, or `quarter`).
+
+**Relative `ts`.** Pass a string like `-5m`, `-1h`, or `-1d`: the SDK subtracts that offset from the current UTC time before calling the API. Supported units are minutes (`m`), hours (`h`), and days (`d`); seconds are not supported. Unsigned or forward offsets (e.g. `5m`) are rejected. You can still pass an absolute timestamp as a `datetime` or ISO-8601 string (as in In [6] above).
 
 In [7]:
+
+```python
+snap = vision_options.get_snapshot(exchange='deribit', instrument='BTC', expiry='next_weekly', ts='-5m')
+```
+
+<br>
+
+**Filter by moneyness** to see how far each leg is from at-the-money (`moneyness ≈ 1.0`). The column is computed in the SDK — filter by moneyness, not by absolute strikes, to keep only legs near ATM on any board.
+
+In [8]:
 
 ```python
 snap.loc[snap['moneyness'].between(0.98, 1.02), ['symbol', 'type', 'strike', 'underlyingPrice', 'moneyness', 'markIv']]
@@ -211,7 +276,7 @@ snap.loc[snap['moneyness'].between(0.98, 1.02), ['symbol', 'type', 'strike', 'un
 
 Requires `matplotlib` (usual in Jupyter: `pip install matplotlib`).
 
-In [8]:
+In [9]:
 
 ```python
 import matplotlib.pyplot as plt
