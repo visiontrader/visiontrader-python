@@ -253,7 +253,7 @@ plt.show()
 | `get_smile(snap, type, min_moneyness=..., max_moneyness=..., underlying_price=...)` | snapshot → smile DataFrame |
 | `get_snapshots(..., on_date=...)` | `GET /options/snapshots` |
 | `snapshots_to_dataframe(...)` | `GET /options/snapshots` → DataFrame |
-| `plot_smile(smile)` | vol smile plot → `(fig, ax)` (`visiontrader.plots`) |
+| `plot_smile(smile, with_metrics=...)` | vol smile plot → `(fig, ax)` or `(fig, axes)` |
 
 Query parameter for the board instrument is **`instrument`**.
 

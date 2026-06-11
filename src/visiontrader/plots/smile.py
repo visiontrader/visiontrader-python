@@ -2,13 +2,28 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Literal
 
 import pandas as pd
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure
+
+SmileMetricName = Literal['oi', 'spread', 'askbid']
+WithMetricsInput = str | Sequence[str]
+
+SMILE_METRICS: frozenset[str] = frozenset({'oi', 'spread', 'askbid'})
+PANEL_METRICS: frozenset[str] = frozenset({'oi', 'spread'})
+FIG_WIDTH = 8.0
+MAIN_PANEL_HEIGHT = 3.5
+METRIC_PANEL_HEIGHT = 1.0
+
+WATERMARK_TEXT = 'visiontrader.io'
+WATERMARK_FONTSIZE = 8
+WATERMARK_COLOR = 'gray'
+WATERMARK_ALPHA = 0.6
 
 
 def _in_ipython() -> bool:
@@ -25,6 +40,36 @@ def _uses_inline_backend() -> bool:
 
     backend = matplotlib.get_backend().lower()
     return 'inline' in backend or 'ipympl' in backend
+
+
+def parse_with_metrics(value: WithMetricsInput | None) -> list[str]:
+    """Normalize ``with_metrics`` input to an ordered list of panel metric names."""
+    if value is None:
+        return []
+
+    if isinstance(value, str):
+        items = [part.strip() for part in value.split('|')] if '|' in value else [value]
+    else:
+        items = list(value)
+
+    if not items:
+        return []
+
+    metrics: list[str] = []
+    for item in items:
+        metric = str(item).strip().lower()
+        if not metric:
+            raise ValueError('with_metrics contains an empty metric name')
+        if metric not in SMILE_METRICS:
+            raise ValueError(f'Unknown smile metric: {item!r}')
+        if metric == 'askbid':
+            raise NotImplementedError('askbid metric is not implemented yet')
+        if metric not in PANEL_METRICS:
+            raise ValueError(f'Metric {item!r} cannot be rendered as a panel yet')
+        if metric in metrics:
+            raise ValueError(f'Duplicate smile metric: {item!r}')
+        metrics.append(metric)
+    return metrics
 
 
 def _format_underlying_px(value: float) -> str:
@@ -64,26 +109,6 @@ def _smile_title_parts(smile: pd.DataFrame) -> tuple[str, str]:
     return main, subtitle
 
 
-WATERMARK_TEXT = 'visiontrader.io'
-WATERMARK_FONTSIZE = 8
-WATERMARK_COLOR = 'gray'
-WATERMARK_ALPHA = 0.6
-
-
-def _set_smile_watermark(ax: Axes) -> None:
-    ax.text(
-        0.99,
-        0.01,
-        WATERMARK_TEXT,
-        transform=ax.transAxes,
-        ha='right',
-        va='bottom',
-        fontsize=WATERMARK_FONTSIZE,
-        color=WATERMARK_COLOR,
-        alpha=WATERMARK_ALPHA,
-    )
-
-
 def _set_smile_titles(ax: Axes, smile: pd.DataFrame) -> None:
     main, subtitle = _smile_title_parts(smile)
     ax.text(0.5, 1.08, main, transform=ax.transAxes, ha='center', va='bottom', fontsize=11)
@@ -99,11 +124,91 @@ def _set_smile_titles(ax: Axes, smile: pd.DataFrame) -> None:
     )
 
 
-def plot_smile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
-    """Plot a volatility smile in a Jupyter notebook and return ``(fig, ax)``.
+def _set_figure_watermark(fig: Figure) -> None:
+    fig.text(
+        0.99,
+        0.01,
+        WATERMARK_TEXT,
+        transform=fig.transFigure,
+        ha='right',
+        va='bottom',
+        fontsize=WATERMARK_FONTSIZE,
+        color=WATERMARK_COLOR,
+        alpha=WATERMARK_ALPHA,
+    )
 
-    With the usual ``%matplotlib inline`` backend the figure is shown once at
-    cell end. In other environments ``display(fig)`` or ``plt.show()`` is used.
+
+def _metric_bar_width(moneyness: pd.Series) -> float:
+    values = pd.Series(moneyness.dropna().unique()).sort_values()
+    if len(values) < 2:
+        return 0.01
+    return float(values.diff().dropna().min()) * 0.8
+
+
+def _plot_smile_main(ax: Axes, smile: pd.DataFrame, *, show_xlabel: bool) -> None:
+    ax.plot(smile['moneyness'], smile['markIv'], 'o-', label='mark IV', markersize=4)
+    ax.axvline(1.0, color='red', linestyle='--', linewidth=0.8)
+    if show_xlabel:
+        ax.set_xlabel('moneyness')
+    ax.set_ylabel('mark IV')
+    ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
+    ax.legend()
+
+
+def _plot_oi_metric(ax: Axes, smile: pd.DataFrame) -> None:
+    valid = smile.dropna(subset=['oi'])
+    if not valid.empty:
+        width = _metric_bar_width(valid['moneyness'])
+        ax.bar(valid['moneyness'], valid['oi'], width=width, color='tab:blue', alpha=0.7)
+    ax.set_ylabel('oi')
+    ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
+
+
+def _plot_spread_metric(ax: Axes, smile: pd.DataFrame) -> None:
+    spread = smile['ask'] - smile['bid']
+    valid = smile.loc[spread.notna()].copy()
+    if not valid.empty:
+        width = _metric_bar_width(valid['moneyness'])
+        ax.bar(
+            valid['moneyness'],
+            spread.loc[spread.notna()],
+            width=width,
+            color='tab:orange',
+            alpha=0.7,
+        )
+    ax.set_ylabel('spread')
+    ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
+
+
+def _plot_metric_panel(ax: Axes, smile: pd.DataFrame, metric: str) -> None:
+    if metric == 'oi':
+        _plot_oi_metric(ax, smile)
+    elif metric == 'spread':
+        _plot_spread_metric(ax, smile)
+
+
+def _show_figure(fig: Figure) -> None:
+    if _in_ipython() and _uses_inline_backend():
+        return
+    if _in_ipython():
+        from IPython.display import display
+
+        display(fig)
+        return
+    import matplotlib.pyplot as plt
+
+    plt.show()
+
+
+def plot_smile(
+    smile: pd.DataFrame,
+    with_metrics: WithMetricsInput | None = None,
+) -> tuple[Figure, Axes] | tuple[Figure, list[Axes]]:
+    """Plot a volatility smile in a Jupyter notebook.
+
+    ``with_metrics`` accepts ``'oi'``, ``['oi']``, ``['oi', 'spread']``, or sugar
+    syntax ``'oi|spread'``. Each metric adds a bar-chart panel below the smile.
+    Returns ``(fig, ax)`` or ``(fig, axes)`` when metric panels are present.
     """
     try:
         import matplotlib.pyplot as plt
@@ -112,25 +217,38 @@ def plot_smile(smile: pd.DataFrame) -> tuple[Figure, Axes]:
             'plot_smile requires matplotlib. Install with: pip install "visiontrader[plots]"',
         ) from exc
 
-    fig, ax = plt.subplots(figsize=(8, 3.5))
-    ax.plot(smile['moneyness'], smile['markIv'], 'o-', label='mark IV', markersize=4)
-    ax.axvline(1.0, color='red', linestyle='--', linewidth=0.8)
-    ax.set_xlabel('moneyness')
-    ax.set_ylabel('mark IV')
-    ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
-    ax.legend()
-    fig.tight_layout()
-    fig.subplots_adjust(top=0.78)
-    _set_smile_titles(ax, smile)
-    _set_smile_watermark(ax)
+    metrics = parse_with_metrics(with_metrics)
+    panel_count = len(metrics)
 
-    if _in_ipython() and _uses_inline_backend():
-        pass
-    elif _in_ipython():
-        from IPython.display import display
-
-        display(fig)
+    if panel_count == 0:
+        fig, ax = plt.subplots(figsize=(FIG_WIDTH, MAIN_PANEL_HEIGHT))
+        axes = [ax]
     else:
-        plt.show()
+        total_height = MAIN_PANEL_HEIGHT + panel_count * METRIC_PANEL_HEIGHT
+        fig, axes = plt.subplots(
+            1 + panel_count,
+            1,
+            sharex=True,
+            figsize=(FIG_WIDTH, total_height),
+            gridspec_kw={'height_ratios': [MAIN_PANEL_HEIGHT] + [METRIC_PANEL_HEIGHT] * panel_count},
+        )
+        axes = list(axes)
 
-    return fig, ax
+    main_ax = axes[0]
+    _plot_smile_main(main_ax, smile, show_xlabel=panel_count == 0)
+
+    for metric_ax, metric in zip(axes[1:], metrics, strict=True):
+        _plot_metric_panel(metric_ax, smile, metric)
+
+    if panel_count > 0:
+        axes[-1].set_xlabel('moneyness')
+
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.78 if panel_count == 0 else 0.9)
+    _set_smile_titles(main_ax, smile)
+    _set_figure_watermark(fig)
+    _show_figure(fig)
+
+    if panel_count == 0:
+        return fig, main_ax
+    return fig, axes

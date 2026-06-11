@@ -8,7 +8,7 @@ import pytest
 matplotlib.use('Agg')
 
 from visiontrader import VisionOptionsClient
-from visiontrader.plots import plot_smile
+from visiontrader.plots import parse_with_metrics, plot_smile
 from visiontrader.plots.smile import _smile_title_parts
 
 
@@ -106,15 +106,59 @@ def test_plot_smile_returns_fig_and_ax() -> None:
 
 
 def test_plot_smile_watermark() -> None:
-    _, ax = plot_smile(_plot_smile_sample())
-    watermark = [t for t in ax.texts if t.get_text() == 'visiontrader.io']
+    fig, _ = plot_smile(_plot_smile_sample())
+    watermark = [text for text in fig.texts if text.get_text() == 'visiontrader.io']
     assert len(watermark) == 1
     assert watermark[0].get_fontsize() == 8
     assert watermark[0].get_alpha() == 0.6
     assert watermark[0].get_color() == 'gray'
     import matplotlib.pyplot as plt
 
-    plt.close(ax.figure)
+    plt.close(fig)
+
+
+def test_parse_with_metrics_supports_list_and_sugar() -> None:
+    assert parse_with_metrics('oi') == ['oi']
+    assert parse_with_metrics(['oi']) == ['oi']
+    assert parse_with_metrics('oi|spread') == ['oi', 'spread']
+    assert parse_with_metrics(['oi', 'spread']) == ['oi', 'spread']
+
+
+def test_parse_with_metrics_rejects_unknown_and_askbid() -> None:
+    with pytest.raises(ValueError, match='Unknown smile metric'):
+        parse_with_metrics('volume')
+    with pytest.raises(NotImplementedError, match='askbid'):
+        parse_with_metrics('askbid')
+
+
+def _plot_smile_metrics_sample() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            'underlying': ['BTC', 'BTC', 'BTC'],
+            'exchange': ['deribit', 'deribit', 'deribit'],
+            'symbol': ['BTC-4JUN26-67000-C'] * 3,
+            'settlement_period': ['month'] * 3,
+            'type': ['call'] * 3,
+            'underlyingPrice': [66948.82] * 3,
+            'ts': [pd.Timestamp('2026-06-03 12:00:00+00:00')] * 3,
+            'moneyness': [0.95, 1.0, 1.05],
+            'markIv': [0.5, 0.48, 0.46],
+            'oi': [10.0, None, 30.0],
+            'bid': [0.07, 0.05, None],
+            'ask': [0.08, None, 0.06],
+        }
+    )
+
+
+def test_plot_smile_with_metrics_creates_panels() -> None:
+    fig, axes = plot_smile(_plot_smile_metrics_sample(), with_metrics=['oi', 'spread'])
+    assert len(axes) == 3
+    assert fig.get_figheight() == pytest.approx(5.5)
+    assert len(axes[1].patches) == 2
+    assert len(axes[2].patches) == 1
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
 
 
 def test_smile_title_parts() -> None:
