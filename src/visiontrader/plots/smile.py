@@ -153,6 +153,7 @@ def _plot_askbid_overlay(ax: Axes, smile: pd.DataFrame) -> None:
             bid['moneyness'],
             bid_iv,
             s=POINT_SIZE,
+            marker='^',
             color=BID_POINT_COLOR,
             alpha=0.8,
             label='bid IV (scaled)',
@@ -166,6 +167,7 @@ def _plot_askbid_overlay(ax: Axes, smile: pd.DataFrame) -> None:
             ask['moneyness'],
             ask_iv,
             s=POINT_SIZE,
+            marker='v',
             color=ASK_POINT_COLOR,
             alpha=0.8,
             label='ask IV (scaled)',
@@ -189,7 +191,7 @@ def _plot_smile_main(ax: Axes, smile: pd.DataFrame, *, show_xlabel: bool, show_a
         ax.set_xlabel('moneyness')
     ax.set_ylabel('mark IV')
     ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
-    ax.legend(prop={'size': MAIN_LEGEND_FONTSIZE, 'weight': 'bold'})
+    ax.legend(loc='lower left', fontsize=MAIN_LEGEND_FONTSIZE)
 
 
 def _plot_oi_metric(ax: Axes, smile: pd.DataFrame) -> None:
