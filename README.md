@@ -53,7 +53,7 @@ from visiontrader.plots import plot_smile
 
 vt = VisionOptionsClient()
 snap = vt.get_snapshot(instrument="BTC", expiry="next_daily", ts="-4m")
-smile = vt.get_smile(snap, 'call')
+smile = vt.filter_for_smile(snap, 'call')
 plot_smile(smile)
 ```
 
@@ -250,7 +250,7 @@ plt.show()
 | `list_expiries(exchange, instrument, tradeable_only=...)` | `GET options/expiries` → DataFrame |
 | `list_dates(exchange, instrument, expiry)` | `GET options/dates` → DataFrame |
 | `get_snapshot(...)` | `GET /options/snapshot` → DataFrame |
-| `get_smile(snap, type, min_moneyness=..., max_moneyness=..., underlying_price=...)` | snapshot → smile DataFrame |
+| `filter_for_smile(snap, type, min_moneyness=..., max_moneyness=..., underlying_price=...)` | filter snapshot → smile-ready DataFrame |
 | `get_snapshots(..., on_date=...)` | `GET /options/snapshots` |
 | `snapshots_to_dataframe(...)` | `GET /options/snapshots` → DataFrame |
 | `plot_smile(smile, with_metrics=...)` | vol smile plot → `(fig, ax)` or `(fig, axes)` |

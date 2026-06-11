@@ -29,13 +29,13 @@ def _client() -> VisionOptionsClient:
     return VisionOptionsClient(client=httpx.Client(transport=transport))
 
 
-def test_get_smile_filters_and_sorts() -> None:
-    smile = _client().get_smile(_sample_snapshot(), 'call', 0.99, 1.02)
+def test_filter_for_smile_filters_and_sorts() -> None:
+    smile = _client().filter_for_smile(_sample_snapshot(), 'call', 0.99, 1.02)
     assert list(smile['strike']) == [67000]
     assert smile.iloc[0]['markIv'] == 0.51
 
 
-def test_get_smile_without_bounds_returns_all_legs() -> None:
+def test_filter_for_smile_without_bounds_returns_all_legs() -> None:
     snap = pd.DataFrame(
         {
             'symbol': ['C-low', 'C-mid', 'C-high'],
@@ -45,11 +45,11 @@ def test_get_smile_without_bounds_returns_all_legs() -> None:
             'markIv': [0.3, 0.48, 0.5],
         }
     )
-    smile = _client().get_smile(snap, 'call')
+    smile = _client().filter_for_smile(snap, 'call')
     assert list(smile['moneyness']) == [0.89, 1.0, 1.14]
 
 
-def test_get_smile_recomputes_moneyness_with_underlying_price() -> None:
+def test_filter_for_smile_recomputes_moneyness_with_underlying_price() -> None:
     snap = pd.DataFrame(
         {
             'strike': [66000, 67000],
@@ -59,12 +59,12 @@ def test_get_smile_recomputes_moneyness_with_underlying_price() -> None:
             'markIv': [0.5, 0.48],
         }
     )
-    smile = _client().get_smile(snap, 'call', underlying_price=66000)
+    smile = _client().filter_for_smile(snap, 'call', underlying_price=66000)
     assert smile.iloc[0]['moneyness'] == pytest.approx(1.0)
     assert smile.iloc[1]['moneyness'] == pytest.approx(67000 / 66000)
 
 
-def test_get_smile_includes_boundary_moneyness() -> None:
+def test_filter_for_smile_includes_boundary_moneyness() -> None:
     snap = pd.DataFrame(
         {
             'symbol': ['C-low', 'C-high'],
@@ -74,7 +74,7 @@ def test_get_smile_includes_boundary_moneyness() -> None:
             'markIv': [0.4, 0.5],
         }
     )
-    smile = _client().get_smile(snap, 'call', 0.9, 1.13)
+    smile = _client().filter_for_smile(snap, 'call', 0.9, 1.13)
     assert len(smile) == 2
     assert smile.iloc[0]['moneyness'] == 0.9
     assert smile.iloc[1]['moneyness'] == 1.13
@@ -196,7 +196,7 @@ def test_smile_title_parts() -> None:
 
 
 def test_smile_title_parts_uses_custom_underlying_price() -> None:
-    smile = _client().get_smile(
+    smile = _client().filter_for_smile(
         pd.DataFrame(
             {
                 'underlying': ['BTC'],

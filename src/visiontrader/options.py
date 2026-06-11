@@ -252,7 +252,7 @@ class VisionOptionsClient:
             settlement_period=settlement_period,
         )
 
-    def get_smile(
+    def filter_for_smile(
         self,
         snap: pd.DataFrame,
         option_type: OptionType,
@@ -261,12 +261,12 @@ class VisionOptionsClient:
         *,
         underlying_price: float | None = None,
     ) -> pd.DataFrame:
-        """Build a volatility smile DataFrame from a snapshot board.
+        """Filter a snapshot board into a smile-ready DataFrame (sorted by moneyness).
 
-        Filters by ``option_type`` and drops rows without ``markIv``. Moneyness
-        bounds are applied only when ``min_moneyness`` and/or ``max_moneyness``
-        are passed explicitly. When ``underlying_price`` is set, ``moneyness`` is
-        recomputed as ``strike / underlying_price`` instead of the snapshot value.
+        Keeps one ``option_type``, drops rows without ``markIv``. Moneyness bounds
+        apply only when ``min_moneyness`` and/or ``max_moneyness`` are passed
+        explicitly. When ``underlying_price`` is set, ``moneyness`` is recomputed as
+        ``strike / underlying_price`` instead of the snapshot value.
         """
         smile = snap.loc[snap['type'] == option_type].dropna(subset=['markIv']).copy()
         if underlying_price is not None:

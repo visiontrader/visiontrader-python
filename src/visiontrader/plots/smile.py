@@ -18,7 +18,7 @@ SMILE_METRICS: frozenset[str] = frozenset({'oi', 'spread', 'askbid'})
 PANEL_METRICS: frozenset[str] = frozenset({'oi', 'spread'})
 BID_POINT_COLOR = '#357FD3'
 ASK_POINT_COLOR = '#E63232'
-POINT_SIZE = 3
+POINT_SIZE = 5
 MAIN_LEGEND_FONTSIZE = 20 / 3  # ~1.5× smaller than matplotlib default legend (~10pt)
 FIG_WIDTH = 8.0
 MAIN_PANEL_HEIGHT = 3.5
@@ -244,6 +244,8 @@ def plot_smile(
     with_metrics: WithMetricsInput | None = None,
 ) -> tuple[Figure, Axes] | tuple[Figure, list[Axes]]:
     """Plot a volatility smile in a Jupyter notebook.
+
+    Expects a smile-ready DataFrame (typically from ``filter_for_smile``).
 
     ``with_metrics`` accepts ``'oi'``, ``['oi', 'spread']``, ``'oi|askbid'``, and
     similar forms. ``oi`` and ``spread`` add bar-chart panels below the smile;
