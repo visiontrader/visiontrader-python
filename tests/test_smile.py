@@ -105,6 +105,28 @@ def test_plot_smile_returns_fig_and_ax() -> None:
     plt.close(fig)
 
 
+def test_moneyness_reference_price_prefers_custom_underlying() -> None:
+    from visiontrader.plots.smile import _moneyness_reference_price
+
+    smile = pd.DataFrame(
+        {
+            'underlyingPrice': [66948.82],
+            'moneynessUnderlyingPrice': [64000.0],
+        }
+    )
+    assert _moneyness_reference_price(smile) == 64000.0
+
+
+def test_plot_smile_adds_strike_secondary_xaxis() -> None:
+    fig, ax = plot_smile(_plot_smile_sample())
+    strike_axes = [axis for axis in fig.axes if axis.get_xlabel() == 'strike']
+    assert len(strike_axes) == 1
+    assert strike_axes[0] is not ax
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
+
+
 def test_plot_smile_watermark() -> None:
     fig, _ = plot_smile(_plot_smile_sample())
     watermark = [text for text in fig.texts if text.get_text() == 'www.visiontrader.io']

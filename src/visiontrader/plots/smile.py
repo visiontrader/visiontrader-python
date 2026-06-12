@@ -76,6 +76,36 @@ def _format_underlying_px(value: float) -> str:
     return f'{round(value):,}'.replace(',', ' ')
 
 
+def _moneyness_reference_price(smile: pd.DataFrame) -> float | None:
+    if smile.empty:
+        return None
+    row = smile.iloc[0]
+    if 'moneynessUnderlyingPrice' in smile.columns:
+        px = row.get('moneynessUnderlyingPrice')
+        if px is not None and not pd.isna(px):
+            return float(px)
+    px = row.get('underlyingPrice')
+    if px is not None and not pd.isna(px):
+        return float(px)
+    return None
+
+
+def _add_strike_secondary_xaxis(ax: Axes, underlying_px: float) -> None:
+    from matplotlib.ticker import FuncFormatter
+
+    def moneyness_to_strike(moneyness: float) -> float:
+        return moneyness * underlying_px
+
+    def strike_to_moneyness(strike: float) -> float:
+        return strike / underlying_px
+
+    secax = ax.secondary_xaxis('top', functions=(moneyness_to_strike, strike_to_moneyness))
+    secax.set_xlabel('strike')
+    secax.xaxis.set_major_formatter(
+        FuncFormatter(lambda strike, _pos: _format_underlying_px(strike)),
+    )
+
+
 def _smile_title_parts(smile: pd.DataFrame) -> tuple[str, str]:
     if smile.empty:
         raise ValueError('smile DataFrame is empty')
@@ -191,6 +221,9 @@ def _plot_smile_main(ax: Axes, smile: pd.DataFrame, *, show_xlabel: bool, show_a
         ax.set_xlabel('moneyness')
     ax.set_ylabel('mark IV')
     ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.4)
+    underlying_px = _moneyness_reference_price(smile)
+    if underlying_px is not None and underlying_px != 0:
+        _add_strike_secondary_xaxis(ax, underlying_px)
     ax.legend(loc='lower left', fontsize=MAIN_LEGEND_FONTSIZE)
 
 
@@ -249,7 +282,9 @@ def plot_smile(
 
     ``with_metrics`` accepts ``'oi'``, ``['oi', 'spread']``, ``'oi|askbid'``, and
     similar forms. ``oi`` and ``spread`` add bar-chart panels below the smile;
-    ``askbid`` overlays bid/ask IV points on the main chart. Returns ``(fig, ax)``
+    ``askbid`` overlays bid/ask IV points on the main chart. The main panel also
+    shows a top ``strike`` axis (matplotlib ``secondary_xaxis``) when underlying
+    price is available. Returns ``(fig, ax)``
     or ``(fig, axes)`` when panel metrics are present.
     """
     try:
@@ -288,7 +323,7 @@ def plot_smile(
         axes[-1].set_xlabel('moneyness')
 
     fig.tight_layout()
-    fig.subplots_adjust(top=0.78 if panel_count == 0 else 0.9)
+    fig.subplots_adjust(top=0.82 if panel_count == 0 else 0.92)
     _set_smile_titles(main_ax, smile)
     _set_figure_watermark(fig)
     _show_figure(fig)
