@@ -141,10 +141,10 @@ def _smile_title_parts(smile: pd.DataFrame) -> tuple[str, str]:
 
 def _set_smile_titles(ax: Axes, smile: pd.DataFrame) -> None:
     main, subtitle = _smile_title_parts(smile)
-    ax.text(0.5, 1.08, main, transform=ax.transAxes, ha='center', va='bottom', fontsize=11)
+    ax.text(0.5, 1.28, main, transform=ax.transAxes, ha='center', va='bottom', fontsize=11)
     ax.text(
         0.5,
-        1.01,
+        1.21,
         subtitle,
         transform=ax.transAxes,
         ha='center',
