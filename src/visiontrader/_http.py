@@ -14,6 +14,10 @@ ENV_BASE_URL = 'VT_API_BASE_URL'
 DEFAULT_TIMEOUT = 240.0
 
 
+def _http_timeout(seconds: float) -> httpx.Timeout:
+    return httpx.Timeout(seconds)
+
+
 class HttpClient:
     def __init__(
         self,
@@ -23,8 +27,9 @@ class HttpClient:
         client: httpx.Client | None = None,
     ) -> None:
         resolved = (base_url or os.environ.get(ENV_BASE_URL) or DEFAULT_BASE_URL).rstrip('/')
+        self._timeout = _http_timeout(timeout)
         self._owns_client = client is None
-        self._client = client or httpx.Client(base_url=resolved, timeout=timeout)
+        self._client = client or httpx.Client(base_url=resolved, timeout=self._timeout)
 
     @property
     def client(self) -> httpx.Client:
@@ -41,7 +46,7 @@ class HttpClient:
         self.close()
 
     def get_json(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        response = self._client.get(path, params=params)
+        response = self._client.get(path, params=params, timeout=self._timeout)
         return _parse_response(response)
 
 
