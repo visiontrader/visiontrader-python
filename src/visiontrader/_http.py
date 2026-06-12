@@ -11,6 +11,7 @@ from visiontrader.exceptions import ApiError, ValidationError
 
 DEFAULT_BASE_URL = 'http://localhost:5259'
 ENV_BASE_URL = 'VT_API_BASE_URL'
+DEFAULT_TIMEOUT = 240.0
 
 
 class HttpClient:
@@ -18,7 +19,7 @@ class HttpClient:
         self,
         base_url: str | None = None,
         *,
-        timeout: float = 60.0,
+        timeout: float = DEFAULT_TIMEOUT,
         client: httpx.Client | None = None,
     ) -> None:
         resolved = (base_url or os.environ.get(ENV_BASE_URL) or DEFAULT_BASE_URL).rstrip('/')

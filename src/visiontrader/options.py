@@ -8,7 +8,7 @@ from typing import Literal
 import httpx
 import pandas as pd
 
-from visiontrader._http import HttpClient, unwrap_data
+from visiontrader._http import DEFAULT_TIMEOUT, HttpClient, unwrap_data
 from visiontrader.exceptions import SnapshotError
 from visiontrader.models import OptionsSnapshot, expiry_from_json, snapshot_from_json
 from visiontrader.resolvers import is_expiry_alias, resolve_expiry, resolve_ts
@@ -120,13 +120,16 @@ class VisionOptionsClient:
     Client for the VisionTrader Options REST API (VT.AspNetApp).
 
     Query parameter for the board instrument is ``instrument`` (e.g. BTC, BTC_USDC).
+
+    HTTP requests use a default ``timeout`` of 240 seconds (4 minutes); pass a
+    lower value to ``VisionOptionsClient(timeout=...)`` if needed.
     """
 
     def __init__(
         self,
         base_url: str | None = None,
         *,
-        timeout: float = 60.0,
+        timeout: float = DEFAULT_TIMEOUT,
         client: httpx.Client | None = None,
     ) -> None:
         self._http = HttpClient(base_url, timeout=timeout, client=client)
