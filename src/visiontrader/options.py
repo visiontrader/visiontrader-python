@@ -230,6 +230,9 @@ class VisionOptionsClient:
         ``underlyingPrice``, then per-leg ``symbol``, ``strike``, ``moneyness``, ``type``,
         ``bid``, ``ask``, ``markPrice``, ``markIv``, ``oi``. ``moneyness`` is
         ``strike / underlyingPrice``.
+
+        Beta note: the backend query is not optimized yet; a single snapshot often
+        takes **1.5–2 minutes**. Ensure HTTP and proxy timeouts exceed that.
         """
         resolved_expiry, settlement_period = self._resolve_snapshot_expiry(
             exchange,
@@ -292,7 +295,12 @@ class VisionOptionsClient:
         *,
         resolution: str = '1m',
     ) -> list[OptionsSnapshot]:
-        """GET /options/snapshots."""
+        """GET /options/snapshots.
+
+        Beta note: a full trading day is not optimized yet and often takes
+        **3–5 minutes**. Use ``VisionOptionsClient(timeout=360)`` or higher and
+        matching proxy limits.
+        """
         body = self._http.get_json(
             '/options/snapshots',
             params={

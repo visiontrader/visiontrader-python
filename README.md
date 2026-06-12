@@ -73,13 +73,13 @@ plot_smile(snap)
 **Filter the snapshot for a put smile:**
 
 1. Keep only `put` options.
-2. Recompute moneyness from a custom underlying price (`underlying_price=64000`).
-3. Trim the smile wings by moneyness (`min_moneyness=0.88`, `max_moneyness=1.09`).
+2. Recompute moneyness from a custom underlying price (`underlying_price=67000`).
+3. Trim the smile wings by moneyness (`min_moneyness=0.80`, `max_moneyness=1.17`).
 
 In [3]:
 
 ```python
-smile = vt.filter_for_smile(snap, 'put', underlying_price=64000, min_moneyness=0.88, max_moneyness=1.09)
+smile = vt.filter_for_smile(snap, 'put', underlying_price = 67000,  min_moneyness = 0.80, max_moneyness = 1.17 )
 plot_smile(smile)
 ```
 
@@ -306,6 +306,24 @@ plt.show()
 <small><em>Why trim the right wing (`moneyness &lt;= 1.13`)? Beyond that point the curve in the raw API data stops behaving like a market smile and flattens into a plateau. From strike 76500 onward (moneyness ≈ 1.14+) `markIv` is stuck at ~0.8505 while moneyness keeps increasing — seven strikes in a row, identical IV. On the call side those legs have no real market: `bid` is null, `ask` is the minimum tick (0.0001), `markPrice` is 0 or null. Puts at the same strikes still have a rising `markPrice`, but Deribit assigns the same capped `markIv` per strike. That pattern is typical of mark-model extrapolation / IV ceiling on illiquid deep OTM wings, not tradeable skew. Trimming keeps the chart focused on the liquid part of the board where IV actually varies with moneyness. For analysis of the full raw board, drop the filter and inspect `markPrice` and quotes alongside `markIv`.</em></small>
 
 
+## Performance (beta)
+
+The API is in beta: snapshot queries are **not yet optimized** on the server. Typical
+wall-clock times today:
+
+| Method | Typical duration |
+|--------|------------------|
+| `get_snapshot` | **1.5–2 minutes** |
+| `get_snapshots` (full day) | **3–5 minutes** |
+
+The SDK default HTTP timeout is **240 seconds (4 minutes)** — enough for a single
+snapshot. For a full-day `get_snapshots`, pass a higher timeout, e.g.
+`VisionOptionsClient(timeout=360)`.
+
+Any reverse proxy or load balancer in front of the API (nginx, Keenetic, cloud LB)
+must allow **at least** these durations; otherwise the client may receive
+**HTTP 504 Gateway Time-out** HTML instead of JSON while the backend is still working.
+
 ## API coverage (v0.1)
 
 | Method | HTTP |
@@ -329,6 +347,7 @@ Query parameter for the board instrument is **`instrument`**.
 ## Backend
 
 Requires a running [VT.AspNetApp](https://github.com/visiontrader) REST API and its gRPC data layer.
+See [Performance (beta)](#performance-beta) for current snapshot latency expectations.
 
 ## License
 
