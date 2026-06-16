@@ -9,28 +9,23 @@ from pathlib import Path
 from visiontrader.exceptions import VisionTraderError
 
 CREDENTIALS_DIR_NAME = '.visiontrader'
-CREDENTIALS_FILE_NAME = 'credentials'
-ENV_FILE_NAME = '.env'
-
-ENV_KEY_ID = 'VISIONTRADER_KEY_ID'
-ENV_PRIVATE_KEY = 'VISIONTRADER_PRIVATE_KEY'
+AUTH_KEYS_DIR_NAME = 'auth_keys'
 
 PRIVATE_KEY_PREFIXES = ('vt_sk_live_', 'vt_sk_test_')
 KEY_ID_PATTERN = re.compile(r'^key_[A-Za-z0-9]+$')
-
-SAVE_TARGETS = frozenset({'file', 'env'})
 
 
 def credentials_dir() -> Path:
     return Path.home() / CREDENTIALS_DIR_NAME
 
 
-def credentials_file_path() -> Path:
-    return credentials_dir() / CREDENTIALS_FILE_NAME
+def auth_keys_dir() -> Path:
+    return credentials_dir() / AUTH_KEYS_DIR_NAME
 
 
-def env_file_path() -> Path:
-    return credentials_dir() / ENV_FILE_NAME
+def key_file_path(key_id: str) -> Path:
+    validate_key_id(key_id)
+    return auth_keys_dir() / key_id
 
 
 def display_path(path: Path) -> str:
@@ -59,26 +54,6 @@ def validate_key_id(key_id: str) -> None:
         raise VisionTraderError("key_id must match the pattern 'key_<id>' (e.g. key_abc123).")
 
 
-def normalize_save_to(save_to: str | tuple[str, ...]) -> tuple[str, ...]:
-    if isinstance(save_to, str):
-        targets = (save_to,)
-    elif isinstance(save_to, tuple):
-        if not save_to:
-            raise VisionTraderError('save_to must include at least one target: "file", "env".')
-        if not all(isinstance(item, str) for item in save_to):
-            raise VisionTraderError('save_to must be a str or tuple[str, ...].')
-        targets = save_to
-    else:
-        raise VisionTraderError('save_to must be a str or tuple[str, ...].')
-
-    unknown = [target for target in targets if target not in SAVE_TARGETS]
-    if unknown:
-        allowed = ', '.join(f'"{target}"' for target in sorted(SAVE_TARGETS))
-        raise VisionTraderError(f'save_to accepts only {allowed}; got {unknown!r}.')
-
-    return targets
-
-
 def mask_private_key(key: str) -> str:
     prefix = next(p for p in PRIVATE_KEY_PREFIXES if key.startswith(p))
     payload = key[len(prefix) :]
@@ -86,18 +61,13 @@ def mask_private_key(key: str) -> str:
     return f'{prefix}{visible}*****'
 
 
-def write_credentials_file(path: Path, *, key_id: str, private_key: str) -> None:
+def write_key_file(key_id: str, *, private_key: str) -> Path:
+    path = key_file_path(key_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     content = f'key_id={key_id}\nprivate_key={private_key}\n'
     path.write_text(content, encoding='utf-8', newline='\n')
     _set_private_file_permissions(path)
-
-
-def write_env_file(path: Path, *, key_id: str, private_key: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = f'{ENV_KEY_ID}={key_id}\n{ENV_PRIVATE_KEY}={private_key}\n'
-    path.write_text(content, encoding='utf-8', newline='\n')
-    _set_private_file_permissions(path)
+    return path
 
 
 def _set_private_file_permissions(path: Path) -> None:

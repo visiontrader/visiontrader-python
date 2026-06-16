@@ -1,19 +1,18 @@
 from __future__ import annotations
 
+import base64
 import os
+import secrets
 from pathlib import Path
 
 import pytest
 
 import visiontrader as vt
 from visiontrader._credentials import (
-    ENV_KEY_ID,
-    ENV_PRIVATE_KEY,
-    credentials_file_path,
+    auth_keys_dir,
     display_path,
-    env_file_path,
+    key_file_path,
     mask_private_key,
-    normalize_save_to,
     validate_key_id,
     validate_private_key,
 )
@@ -49,27 +48,6 @@ def test_validate_key_id_rejects_invalid_format() -> None:
         validate_key_id('abc123')
 
 
-@pytest.mark.parametrize(
-    ('save_to', 'expected'),
-    [
-        ('file', ('file',)),
-        ('env', ('env',)),
-        (('file', 'env'), ('file', 'env')),
-    ],
-)
-def test_normalize_save_to(save_to: str | tuple[str, ...], expected: tuple[str, ...]) -> None:
-    assert normalize_save_to(save_to) == expected
-
-
-@pytest.mark.parametrize(
-    'save_to',
-    [(), 'both', 123, ['file']],
-)
-def test_normalize_save_to_rejects_invalid_values(save_to: object) -> None:
-    with pytest.raises(VisionTraderError):
-        normalize_save_to(save_to)  # type: ignore[arg-type]
-
-
 def test_mask_private_key_hides_payload(test_credentials: tuple[str, str]) -> None:
     private_key, _ = test_credentials
     masked = mask_private_key(private_key)
@@ -78,42 +56,44 @@ def test_mask_private_key_hides_payload(test_credentials: tuple[str, str]) -> No
     assert private_key not in masked
 
 
-def test_setup_key_writes_credentials_file(isolated_home: Path, test_credentials: tuple[str, str]) -> None:
+def test_setup_key_writes_key_file(isolated_home: Path, test_credentials: tuple[str, str]) -> None:
     private_key, key_id = test_credentials
-    setup_key(private_key, key_id, save_to='file')
+    setup_key(private_key, key_id)
 
-    cred_path = credentials_file_path()
-    assert cred_path.exists()
-    assert cred_path.read_text(encoding='utf-8') == f'key_id={key_id}\nprivate_key={private_key}\n'
+    key_path = key_file_path(key_id)
+    assert key_path.exists()
+    assert key_path.parent == auth_keys_dir()
+    assert key_path.read_text(encoding='utf-8') == f'key_id={key_id}\nprivate_key={private_key}\n'
     if os.name != 'nt':
-        assert oct(cred_path.stat().st_mode & 0o777) == oct(0o600)
+        assert oct(key_path.stat().st_mode & 0o777) == oct(0o600)
 
 
-def test_setup_key_writes_env_file(isolated_home: Path, test_credentials: tuple[str, str]) -> None:
-    private_key, key_id = test_credentials
-    setup_key(private_key, key_id, save_to='env')
+def _make_test_credentials() -> tuple[str, str]:
+    payload = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b'=').decode('ascii')
+    return f'vt_sk_live_{payload}', f'key_{secrets.token_hex(6)}'
 
-    dotenv_path = env_file_path()
-    assert dotenv_path.exists()
-    assert dotenv_path.read_text(encoding='utf-8') == (
-        f'{ENV_KEY_ID}={key_id}\n{ENV_PRIVATE_KEY}={private_key}\n'
+
+def test_setup_key_stores_multiple_keys_without_overwrite(isolated_home: Path) -> None:
+    first_key, first_id = _make_test_credentials()
+    second_key, second_id = _make_test_credentials()
+
+    setup_key(first_key, first_id)
+    setup_key(second_key, second_id)
+
+    assert key_file_path(first_id).read_text(encoding='utf-8') == (
+        f'key_id={first_id}\nprivate_key={first_key}\n'
     )
-
-
-def test_setup_key_writes_both_targets(isolated_home: Path, test_credentials: tuple[str, str]) -> None:
-    private_key, key_id = test_credentials
-    setup_key(private_key, key_id, save_to=('file', 'env'))
-
-    assert credentials_file_path().exists()
-    assert env_file_path().exists()
+    assert key_file_path(second_id).read_text(encoding='utf-8') == (
+        f'key_id={second_id}\nprivate_key={second_key}\n'
+    )
 
 
 def test_setup_key_exported_from_package(test_credentials: tuple[str, str], isolated_home: Path) -> None:
     private_key, key_id = test_credentials
-    vt.setup_key(private_key, key_id, save_to='file')
-    assert credentials_file_path().exists()
+    vt.setup_key(private_key, key_id)
+    assert key_file_path(key_id).exists()
 
 
 def test_display_path_uses_tilde(isolated_home: Path) -> None:
-    path = isolated_home / '.visiontrader' / 'credentials'
-    assert display_path(path) == '~/.visiontrader/credentials'
+    path = isolated_home / '.visiontrader' / 'auth_keys' / 'key_abc123'
+    assert display_path(path) == '~/.visiontrader/auth_keys/key_abc123'
