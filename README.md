@@ -4,7 +4,7 @@ VisionTrader is a quantitative research toolkit for cryptocurrency options marke
 
 Historical options data is available five minutes after market events occur.
 
-Analyze volatility smiles, term structures, open interest, and option market dynamics directly from Pandas DataFrames.
+Analyze volatility smiles, term structures, open interest, and option market dynamics directly from pandas DataFrames.
 
 **Why VisionTrader:**
 
@@ -25,19 +25,9 @@ pip install -e ".[dev]"
 pytest
 ```
 
-**pandas** is a core dependency (installed automatically):
-
-```python
-import pandas as pd
-```
-
 ## Quickstart
 
-Requires a running VT.AspNetApp API and plotting extras:
-
-```bash
-pip install -e ".[plots]"
-```
+The library requires access to the REST API at `http://localhost:5259` (production endpoint TBD). **matplotlib** is needed for `plot_smile` (already included if you ran `pip install -e ".[dev]"` above; otherwise `pip install -e ".[plots]"`).
 
 In Jupyter, enable inline plotting once (if your environment does not already):
 
@@ -57,12 +47,32 @@ from visiontrader.plots import plot_smile
 vt = VisionOptionsClient()
 ```
 
-**Fetch a snapshot of the options board.** See the [Tutorial](#alternative-snapshot-arguments-expiry-aliases-and-relative-timestamps) for how `next_*` expiry aliases and relative `ts` work.
+**Fetch a snapshot of the options board and view its main structure.** A snapshot is the full options board at one timestamp; `get_snapshot` returns it as `snap`, a pandas DataFrame where each row is one option leg (call or put) at a given strike. See the [Tutorial](#alternative-snapshot-arguments-expiry-aliases-and-relative-timestamps) for how `next_*` expiry aliases and relative `ts` work.
 
 In [2]:
 
 ```python
 snap = vt.get_snapshot(exchange='deribit', instrument="BTC", expiry="next_weekly", ts="-5m")
+snap.loc[:, ['symbol', 'strike', 'moneyness', 'type', 'bid', 'ask', 'markPrice', 'markIv', 'oi']].head(6)
+```
+
+```
+                symbol   strike  moneyness  type     bid     ask  markPrice  markIv    oi
+0  BTC-19JUN26-50000-C  50000.0     0.7882  call  0.2025  0.2205     0.2121  0.6849   NaN
+1  BTC-19JUN26-50000-P  50000.0     0.7882   put  0.0001  0.0002     0.0001  0.6848  229.2
+2  BTC-19JUN26-53000-C  53000.0     0.8355  call  0.1450  0.1805     0.1650  0.5948   NaN
+3  BTC-19JUN26-53000-P  53000.0     0.8355   put  0.0003  0.0004     0.0003  0.5948  607.8
+4  BTC-19JUN26-54000-C  54000.0     0.8513  call  0.1300  0.1650     0.1494  0.5679   NaN
+5  BTC-19JUN26-54000-P  54000.0     0.8513   put  0.0004  0.0006     0.0005  0.5678  516.4
+```
+
+**Plot the vol smile from the snapshot.**
+
+`plot_smile` draws the smile as-is from the raw snapshot — no `filter_for_smile`, no metric panels. The subtitle uses the first row's option type (usually `call`).
+
+In [3]:
+
+```python
 plot_smile(snap)
 ```
 
@@ -70,13 +80,13 @@ plot_smile(snap)
 
 <br>
 
-**Filter the snapshot for a put smile:**
+**Filter and customize the snapshot for a put smile:**
 
 1. Keep only `put` options.
 2. Recompute moneyness from a custom underlying price (`underlying_price=67000`).
 3. Trim the smile wings by moneyness (`min_moneyness=0.80`, `max_moneyness=1.17`).
 
-In [3]:
+In [4]:
 
 ```python
 smile = vt.filter_for_smile(snap, 'put', underlying_price = 67000,  min_moneyness = 0.80, max_moneyness = 1.17 )
@@ -89,7 +99,7 @@ plot_smile(smile)
 
 **Add open interest, spread, and ask/bid levels** — `oi` and `spread` panels below the smile, plus `askbid` markers on the main chart (ask/bid IV via naive scaling from mark price).
 
-In [4]:
+In [5]:
 
 ```python
 plot_smile(smile, with_metrics=['oi', 'spread', 'askbid'])
@@ -247,6 +257,8 @@ In [7]:
 snap = vision_options.get_snapshot(exchange='deribit', instrument='BTC', expiry='next_weekly', ts='-5m')
 ```
 
+<small><em>In the beta release, this request can take more than 1.5 minutes.</em></small>
+
 <br>
 
 **Filter by moneyness** to see how far each leg is from at-the-money (`moneyness ≈ 1.0`). The column is computed in the SDK — filter by moneyness, not by absolute strikes, to keep only legs near ATM on any board.
@@ -272,7 +284,7 @@ snap.loc[snap['moneyness'].between(0.98, 1.02), ['symbol', 'type', 'strike', 'un
 ```
 <br>
 
-**Plot the volatility smile from the same snapshot**. On Deribit `markIv` is the same per strike for calls and puts — one line per strike is enough.
+**Manually plot the volatility smile from the same snapshot.** On Deribit `markIv` is the same per strike for calls and puts — one line per strike is enough.
 
 Requires `matplotlib` (usual in Jupyter: `pip install matplotlib`).
 
@@ -303,26 +315,8 @@ plt.show()
 
 ![BTC vol smile — Deribit 4JUN26 @ 2026-06-03 12:00 UTC](docs/images/vol_smile.png)
 
-<small><em>Why trim the right wing (`moneyness &lt;= 1.13`)? Beyond that point the curve in the raw API data stops behaving like a market smile and flattens into a plateau. From strike 76500 onward (moneyness ≈ 1.14+) `markIv` is stuck at ~0.8505 while moneyness keeps increasing — seven strikes in a row, identical IV. On the call side those legs have no real market: `bid` is null, `ask` is the minimum tick (0.0001), `markPrice` is 0 or null. Puts at the same strikes still have a rising `markPrice`, but Deribit assigns the same capped `markIv` per strike. That pattern is typical of mark-model extrapolation / IV ceiling on illiquid deep OTM wings, not tradeable skew. Trimming keeps the chart focused on the liquid part of the board where IV actually varies with moneyness. For analysis of the full raw board, drop the filter and inspect `markPrice` and quotes alongside `markIv`.</em></small>
+<small><em>Why `moneyness ≤ 1.13`? Past ~1.14, `markIv` plateaus (~0.85) while quotes vanish on calls — Deribit mark extrapolation, not market smile. The filter keeps the liquid part of the curve.</em></small>
 
-
-## Performance (beta)
-
-The API is in beta: snapshot queries are **not yet optimized** on the server. Typical
-wall-clock times today:
-
-| Method | Typical duration |
-|--------|------------------|
-| `get_snapshot` | **1.5–2 minutes** |
-| `get_snapshots` (full day) | **3–5 minutes** |
-
-The SDK default HTTP timeout is **240 seconds (4 minutes)** — enough for a single
-snapshot. For a full-day `get_snapshots`, pass a higher timeout, e.g.
-`VisionOptionsClient(timeout=360)`.
-
-Any reverse proxy or load balancer in front of the API (nginx, Keenetic, cloud LB)
-must allow **at least** these durations; otherwise the client may receive
-**HTTP 504 Gateway Time-out** HTML instead of JSON while the backend is still working.
 
 ## API coverage (v0.1)
 
@@ -347,7 +341,6 @@ Query parameter for the board instrument is **`instrument`**.
 ## Backend
 
 Requires a running [VT.AspNetApp](https://github.com/visiontrader) REST API and its gRPC data layer.
-See [Performance (beta)](#performance-beta) for current snapshot latency expectations.
 
 ## License
 

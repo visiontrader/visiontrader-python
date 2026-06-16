@@ -1,7 +1,7 @@
 """Official Python client for the VisionTrader market data API."""
 
 from visiontrader.exceptions import ApiError, SnapshotError, ValidationError, VisionTraderError
-from visiontrader.models import Expiry, OptionLeg, OptionsSnapshot
+from visiontrader.models import Expiry, OptionLeg, OptionsSnapshot, SnapshotInfo
 from visiontrader.options import VisionOptionsClient
 
 __version__ = '0.1.0'
@@ -11,6 +11,7 @@ __all__ = [
     'Expiry',
     'OptionLeg',
     'OptionsSnapshot',
+    'SnapshotInfo',
     'SnapshotError',
     'ValidationError',
     'VisionOptionsClient',

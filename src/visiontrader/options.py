@@ -10,7 +10,15 @@ import pandas as pd
 
 from visiontrader._http import DEFAULT_TIMEOUT, HttpClient, unwrap_data
 from visiontrader.exceptions import SnapshotError
-from visiontrader.models import OptionsSnapshot, expiry_from_json, snapshot_from_json
+from visiontrader.models import (
+    OptionsSnapshot,
+    SnapshotInfo,
+    expiry_from_json,
+    format_board_name,
+    format_time_to_expiry_duration,
+    snapshot_from_json,
+    time_to_expiry_years,
+)
 from visiontrader.resolvers import is_expiry_alias, resolve_expiry, resolve_ts
 
 
@@ -68,6 +76,42 @@ def _leg_moneyness(strike: float, underlying_price: float | None) -> float | Non
     if underlying_price is None or underlying_price == 0:
         return None
     return strike / underlying_price
+
+
+def _atm_mark_iv(snap: pd.DataFrame) -> float | None:
+    frame = snap.dropna(subset=['markIv', 'moneyness'])
+    if frame.empty:
+        return None
+    idx = (frame['moneyness'] - 1.0).abs().idxmin()
+    value = frame.loc[idx, 'markIv']
+    if pd.isna(value):
+        return None
+    return float(value)
+
+
+def _snapshot_info_from_dataframe(snap: pd.DataFrame) -> SnapshotInfo:
+    if snap.empty:
+        raise ValueError('snapshot DataFrame is empty')
+
+    row = snap.iloc[0]
+    expiry = _coerce_date(row['expiry'])
+    ts = _coerce_datetime(row['ts'])
+    underlying_price = row.get('underlyingPrice')
+    if underlying_price is not None and pd.isna(underlying_price):
+        underlying_price = None
+    elif underlying_price is not None:
+        underlying_price = float(underlying_price)
+
+    return SnapshotInfo(
+        board_name=format_board_name(str(row['underlying']), str(row['symbol'])),
+        exchange=str(row['exchange']).capitalize(),
+        expiry=expiry,
+        ts=ts,
+        time_to_expiry=format_time_to_expiry_duration(ts, expiry),
+        time_to_expiry_years=time_to_expiry_years(ts, expiry),
+        underlying_price=underlying_price,
+        mark_iv=_atm_mark_iv(snap),
+    )
 
 
 def _settlement_period_from_expiries(
@@ -257,6 +301,15 @@ class VisionOptionsClient:
             snapshot_from_json(raw),
             settlement_period=settlement_period,
         )
+
+    def info_snapshot(self, snap: pd.DataFrame) -> SnapshotInfo:
+        """Build a summary card for a snapshot board DataFrame.
+
+        Returns board name, exchange, expiration date, snapshot time, year fraction
+        to expiry (Deribit expiry at 08:00 UTC, divisor 365.25), underlying price,
+        and ATM ``markIv``.
+        """
+        return _snapshot_info_from_dataframe(snap)
 
     def filter_for_smile(
         self,
