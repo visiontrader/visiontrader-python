@@ -30,7 +30,7 @@ def test_show_keys_prints_table_with_default_marker(
 
     assert 'key_id' in output
     assert 'private_key' in output
-    assert 'placed time' in output
+    assert 'placed_time' in output
     assert 'key_testlocal01' in output
     assert 'key_abc123*' in output
     assert 'vt_sk_live_dGVzd*****' in output

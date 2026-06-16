@@ -183,6 +183,31 @@ def resolve_default_key_file() -> Path | None:
     return key_path
 
 
+def remove_key_file(key_id: str) -> None:
+    validate_key_id(key_id)
+    path = key_file_path(key_id)
+    if not path.is_file():
+        raise VisionTraderError(f'Key file not found: {display_path(path)}')
+
+    was_default = read_default_key_id() == key_id
+    path.unlink()
+
+    if was_default:
+        reset_default_key_file()
+
+
+def reset_default_key_file() -> str | None:
+    default_path = default_key_file_path()
+    first_key_id = next(iter(list_auth_key_ids()), None)
+    if first_key_id is None:
+        if default_path.is_file():
+            default_path.unlink()
+        return None
+
+    write_default_key_id(first_key_id)
+    return first_key_id
+
+
 def _set_private_file_permissions(path: Path) -> None:
     if os.name != 'nt':
         path.chmod(0o600)

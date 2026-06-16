@@ -8,6 +8,7 @@ from visiontrader._credentials import (
     ensure_default_key_file,
     list_stored_keys,
     mask_private_key,
+    remove_key_file,
     validate_key_id,
     validate_private_key,
     write_default_key_id,
@@ -38,12 +39,44 @@ def setup_key(key: str, key_id: str) -> None:
     key_path = write_key_file(key_id, private_key=key)
     write_default_key_id(key_id)
     print(f'✓ Private key saved to {display_path(key_path)} (permissions 600)')
-    print()
-    print('Next: create VisionOptionsClient(base_url=...) — credentials will load automatically.')
+
+
+def set_default_key(key_id: str) -> None:
+    """
+    Set the default API key used for automatic login.
+
+    Updates ``~/.visiontrader/auth_keys/default_key`` to point at an existing key file.
+
+    Parameters
+    ----------
+    key_id:
+        API key identifier (``key_...``). The corresponding file must already exist under
+        ``~/.visiontrader/auth_keys/``.
+    """
+    validate_key_id(key_id)
+    write_default_key_id(key_id)
+    print(f'✓ Default key set to {key_id}')
+
+
+def remove_key(key_id: str) -> None:
+    """
+    Remove an installed API key from ``~/.visiontrader/auth_keys``.
+
+    If the removed key is the current default, ``default_key`` is recreated to point at the
+    first remaining key (alphabetically), or removed when no keys are left.
+
+    Parameters
+    ----------
+    key_id:
+        API key identifier (``key_...``) to delete.
+    """
+    validate_key_id(key_id)
+    remove_key_file(key_id)
+    print(f'✓ Removed key {key_id}')
 
 
 def _format_keys_table(keys: list[StoredKey], *, default_key_id: str | None) -> str:
-    headers = ('key_id', 'private_key', 'placed time')
+    headers = ('key_id', 'private_key', 'placed_time')
     rows: list[tuple[str, str, str]] = []
     for key in keys:
         display_key_id = f'{key.key_id}*' if key.key_id == default_key_id else key.key_id

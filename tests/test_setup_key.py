@@ -22,7 +22,7 @@ from visiontrader._credentials import (
     write_default_key_id,
     write_key_file,
 )
-from visiontrader.auth import setup_key
+from visiontrader.auth import remove_key, set_default_key, setup_key
 from visiontrader.exceptions import VisionTraderError
 
 
@@ -140,3 +140,68 @@ def test_setup_key_exported_from_package(test_credentials: tuple[str, str], isol
 def test_display_path_uses_tilde(isolated_home: Path) -> None:
     path = isolated_home / '.visiontrader' / 'auth_keys' / 'key_abc123'
     assert display_path(path) == '~/.visiontrader/auth_keys/key_abc123'
+
+
+def test_set_default_key_updates_default_key_file(
+    isolated_home: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    write_key_file('key_abc123', private_key='vt_sk_live_abc123payloadvalue')
+    write_key_file('key_def456', private_key='vt_sk_live_def456payloadvalue')
+    write_default_key_id('key_abc123')
+
+    set_default_key('key_def456')
+
+    assert read_default_key_id() == 'key_def456'
+    assert default_key_file_path().read_text(encoding='utf-8') == 'key_def456\n'
+    assert 'Default key set to key_def456' in capsys.readouterr().out
+
+
+def test_set_default_key_raises_when_key_file_missing(isolated_home: Path) -> None:
+    with pytest.raises(VisionTraderError, match='Key file not found'):
+        set_default_key('key_missing')
+
+
+def test_set_default_key_raises_for_invalid_key_id(isolated_home: Path) -> None:
+    with pytest.raises(VisionTraderError, match='key_<id>'):
+        set_default_key('not_a_key')
+
+
+def test_remove_key_deletes_file_and_keeps_default(isolated_home: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    write_key_file('key_abc123', private_key='vt_sk_live_abc123payloadvalue')
+    write_key_file('key_def456', private_key='vt_sk_live_def456payloadvalue')
+    write_default_key_id('key_abc123')
+
+    remove_key('key_def456')
+
+    assert not key_file_path('key_def456').exists()
+    assert key_file_path('key_abc123').exists()
+    assert read_default_key_id() == 'key_abc123'
+    assert 'Removed key key_def456' in capsys.readouterr().out
+
+
+def test_remove_key_reassigns_default_to_first_remaining_key(isolated_home: Path) -> None:
+    write_key_file('key_def456', private_key='vt_sk_live_def456payloadvalue')
+    write_key_file('key_abc123', private_key='vt_sk_live_abc123payloadvalue')
+    write_default_key_id('key_def456')
+
+    remove_key('key_def456')
+
+    assert not key_file_path('key_def456').exists()
+    assert read_default_key_id() == 'key_abc123'
+
+
+def test_remove_key_deletes_default_key_when_last_key_removed(isolated_home: Path) -> None:
+    write_key_file('key_abc123', private_key='vt_sk_live_abc123payloadvalue')
+    write_default_key_id('key_abc123')
+
+    remove_key('key_abc123')
+
+    assert not key_file_path('key_abc123').exists()
+    assert not default_key_file_path().exists()
+    assert read_default_key_id() is None
+
+
+def test_remove_key_raises_when_key_file_missing(isolated_home: Path) -> None:
+    with pytest.raises(VisionTraderError, match='Key file not found'):
+        remove_key('key_missing')
