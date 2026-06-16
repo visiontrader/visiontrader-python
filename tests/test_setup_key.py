@@ -10,11 +10,17 @@ import pytest
 import visiontrader as vt
 from visiontrader._credentials import (
     auth_keys_dir,
+    default_key_file_path,
     display_path,
+    ensure_default_key_file,
     key_file_path,
     mask_private_key,
+    read_default_key_id,
+    resolve_default_key_file,
     validate_key_id,
     validate_private_key,
+    write_default_key_id,
+    write_key_file,
 )
 from visiontrader.auth import setup_key
 from visiontrader.exceptions import VisionTraderError
@@ -64,6 +70,8 @@ def test_setup_key_writes_key_file(isolated_home: Path, test_credentials: tuple[
     assert key_path.exists()
     assert key_path.parent == auth_keys_dir()
     assert key_path.read_text(encoding='utf-8') == f'key_id={key_id}\nprivate_key={private_key}\n'
+    assert read_default_key_id() == key_id
+    assert default_key_file_path().read_text(encoding='utf-8') == f'{key_id}\n'
     if os.name != 'nt':
         assert oct(key_path.stat().st_mode & 0o777) == oct(0o600)
 
@@ -86,6 +94,41 @@ def test_setup_key_stores_multiple_keys_without_overwrite(isolated_home: Path) -
     assert key_file_path(second_id).read_text(encoding='utf-8') == (
         f'key_id={second_id}\nprivate_key={second_key}\n'
     )
+    assert read_default_key_id() == second_id
+
+
+def test_resolve_default_key_file_uses_default_key(isolated_home: Path) -> None:
+    first_key, first_id = _make_test_credentials()
+    second_key, second_id = _make_test_credentials()
+
+    write_key_file(first_id, private_key=first_key)
+    write_key_file(second_id, private_key=second_key)
+    write_default_key_id(first_id)
+
+    assert resolve_default_key_file() == key_file_path(first_id)
+
+
+def test_resolve_default_key_file_returns_none_when_missing(isolated_home: Path) -> None:
+    assert resolve_default_key_file() is None
+
+
+def test_resolve_default_key_file_creates_default_key_from_first_key(isolated_home: Path) -> None:
+    write_key_file('key_def456', private_key='vt_sk_live_def456payload')
+    write_key_file('key_abc123', private_key='vt_sk_live_abc123payload')
+
+    assert not default_key_file_path().exists()
+
+    assert resolve_default_key_file() == key_file_path('key_abc123')
+    assert read_default_key_id() == 'key_abc123'
+    assert default_key_file_path().read_text(encoding='utf-8') == 'key_abc123\n'
+
+
+def test_resolve_default_key_file_raises_when_key_file_missing(isolated_home: Path) -> None:
+    default_key_file_path().parent.mkdir(parents=True)
+    default_key_file_path().write_text('key_missing\n', encoding='utf-8')
+
+    with pytest.raises(VisionTraderError, match='key file not found'):
+        resolve_default_key_file()
 
 
 def test_setup_key_exported_from_package(test_credentials: tuple[str, str], isolated_home: Path) -> None:
