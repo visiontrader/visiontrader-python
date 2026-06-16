@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from visiontrader.options import VisionOptionsClient
-from visiontrader.smile_analytics import ImpliedForwardPrice, implied_forward_price_from_smile
+from visiontrader.smile_analytics import ImpliedForwardModel, implied_forward_model_from_smile
 
 
 def _client() -> VisionOptionsClient:
@@ -32,23 +32,23 @@ def _synthetic_smile(
     return pd.DataFrame(rows)
 
 
-def test_implied_forward_price_finds_quadratic_anchor() -> None:
+def test_implied_forward_model_finds_quadratic_anchor() -> None:
     smile = _synthetic_smile(anchor=67_123.0, underlying_price=66_500.0)
-    result = implied_forward_price_from_smile(smile)
-    assert isinstance(result, ImpliedForwardPrice)
+    result = implied_forward_model_from_smile(smile)
+    assert isinstance(result, ImpliedForwardModel)
     assert result.price == pytest.approx(67_123.0, rel=1e-3)
     assert result.mark_iv == pytest.approx(0.5, rel=1e-3)
     assert result.snapshot_underlying_price == 66_500.0
     assert result.delta_vs_snapshot == pytest.approx(623.0, rel=1e-3)
 
 
-def test_implied_forward_price_client_wrapper() -> None:
+def test_implied_forward_model_client_wrapper() -> None:
     smile = _synthetic_smile()
-    result = _client().implied_forward_price(smile)
+    result = _client().implied_forward_model(smile)
     assert result.price == pytest.approx(67_000.0, rel=1e-3)
 
 
-def test_implied_forward_price_requires_three_strikes() -> None:
+def test_implied_forward_model_requires_three_strikes() -> None:
     smile = pd.DataFrame(
         {
             'strike': [66_000.0, 67_000.0],
@@ -56,11 +56,11 @@ def test_implied_forward_price_requires_three_strikes() -> None:
         }
     )
     with pytest.raises(ValueError, match='at least 3 distinct strikes'):
-        implied_forward_price_from_smile(smile)
+        implied_forward_model_from_smile(smile)
 
 
-def test_implied_forward_price_str() -> None:
+def test_implied_forward_model_str() -> None:
     smile = _synthetic_smile(anchor=67_000.0, underlying_price=66_948.82)
-    text = str(implied_forward_price_from_smile(smile))
-    assert 'Implied forward price (smile anchor):' in text
+    text = str(implied_forward_model_from_smile(smile))
+    assert 'Implied forward model (smile anchor):' in text
     assert 'Snapshot underlying: 66 948.82' in text

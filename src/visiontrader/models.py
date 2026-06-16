@@ -54,6 +54,7 @@ class SnapshotInfo:
     time_to_expiry: str
     time_to_expiry_years: float
     underlying_price: float | None
+    implied_forward_price: float | None
     mark_iv: float | None
 
     @property
@@ -62,6 +63,11 @@ class SnapshotInfo:
 
     def __str__(self) -> str:
         underlying = 'n/a' if self.underlying_price is None else f'{self.underlying_price:,.2f}'.replace(',', ' ')
+        implied_forward = (
+            'n/a'
+            if self.implied_forward_price is None
+            else f'{self.implied_forward_price:,.2f}'.replace(',', ' ')
+        )
         mark_iv = 'n/a' if self.mark_iv is None else f'{self.mark_iv:.4f}'
         ts_utc = self.ts if self.ts.tzinfo is not None else self.ts.replace(tzinfo=timezone.utc)
         ts_text = ts_utc.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
@@ -73,6 +79,7 @@ class SnapshotInfo:
             f'Time to expiry: {self.time_to_expiry}\n'
             f'Time to expiry (years): {self.time_to_expiry_years:.6f}\n'
             f'Underlying price: {underlying}\n'
+            f'Implied forward price (smile anchor): {implied_forward}\n'
             f'Mark IV (ATM): {mark_iv}'
         )
 

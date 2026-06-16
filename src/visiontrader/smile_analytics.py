@@ -10,8 +10,8 @@ import pandas as pd
 
 
 @dataclass(frozen=True, slots=True)
-class ImpliedForwardPrice:
-    """Forward price implied by the minimum of a fitted volatility smile."""
+class ImpliedForwardModel:
+    """Quadratic smile fit anchored at the implied forward price."""
 
     price: float
     mark_iv: float
@@ -34,7 +34,7 @@ class ImpliedForwardPrice:
             delta_value = self.delta_vs_snapshot
             delta = 'n/a' if delta_value is None else f'{delta_value:+,.2f}'.replace(',', ' ')
         return (
-            f'Implied forward price (smile anchor): {price}\n'
+            f'Implied forward model (smile anchor): {price}\n'
             f'Mark IV at anchor: {mark_iv}\n'
             f'Snapshot underlying: {snapshot}\n'
             f'Delta vs snapshot: {delta}'
@@ -76,19 +76,18 @@ def _quadratic_minimum(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
     return x_min, y_min
 
 
-def implied_forward_price_from_smile(smile: pd.DataFrame) -> ImpliedForwardPrice:
-    """Estimate the forward price from the minimum of a quadratic smile fit.
+def implied_forward_model_from_smile(smile: pd.DataFrame) -> ImpliedForwardModel:
+    """Build an implied-forward model from a volatility smile.
 
     Fits ``markIv`` as a quadratic in ``log(strike)``, finds the analytic
-    minimum, and maps it back to a strike price. The result is the price level
-    the market smile is centered on — which may differ from ``underlyingPrice``
-    in the snapshot (e.g. index vs dated future).
+    minimum, and returns the anchor price plus fitted mark IV. The anchor may
+    differ from ``underlyingPrice`` in the snapshot (e.g. index vs dated future).
     """
     curve = _strikes_with_mark_iv(smile)
     log_strikes = np.log(curve['strike'].to_numpy(dtype=float))
     mark_iv = curve['markIv'].to_numpy(dtype=float)
     log_price, iv_min = _quadratic_minimum(log_strikes, mark_iv)
-    return ImpliedForwardPrice(
+    return ImpliedForwardModel(
         price=math.exp(log_price),
         mark_iv=iv_min,
         snapshot_underlying_price=_snapshot_underlying_price(smile),

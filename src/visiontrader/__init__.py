@@ -2,7 +2,7 @@
 
 from visiontrader.exceptions import ApiError, SnapshotError, ValidationError, VisionTraderError
 from visiontrader.models import Expiry, OptionLeg, OptionsSnapshot, SnapshotInfo
-from visiontrader.smile_analytics import ImpliedForwardPrice
+from visiontrader.smile_analytics import ImpliedForwardModel
 from visiontrader.options import VisionOptionsClient
 
 __version__ = '0.1.0'
@@ -10,7 +10,7 @@ __version__ = '0.1.0'
 __all__ = [
     'ApiError',
     'Expiry',
-    'ImpliedForwardPrice',
+    'ImpliedForwardModel',
     'OptionLeg',
     'OptionsSnapshot',
     'SnapshotInfo',

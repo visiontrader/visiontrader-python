@@ -20,7 +20,7 @@ from visiontrader.models import (
     time_to_expiry_years,
 )
 from visiontrader.resolvers import is_expiry_alias, resolve_expiry, resolve_ts
-from visiontrader.smile_analytics import ImpliedForwardPrice, implied_forward_price_from_smile
+from visiontrader.smile_analytics import ImpliedForwardModel, implied_forward_model_from_smile
 
 
 EXPIRY_COLUMNS = ['expiry', 'settlement_period']
@@ -90,6 +90,14 @@ def _atm_mark_iv(snap: pd.DataFrame) -> float | None:
     return float(value)
 
 
+def _implied_forward_anchor_price(snap: pd.DataFrame) -> float | None:
+    smile = snap.loc[snap['type'] == 'call'].dropna(subset=['markIv'])
+    try:
+        return implied_forward_model_from_smile(smile).price
+    except ValueError:
+        return None
+
+
 def _snapshot_info_from_dataframe(snap: pd.DataFrame) -> SnapshotInfo:
     if snap.empty:
         raise ValueError('snapshot DataFrame is empty')
@@ -111,6 +119,7 @@ def _snapshot_info_from_dataframe(snap: pd.DataFrame) -> SnapshotInfo:
         time_to_expiry=format_time_to_expiry_duration(ts, expiry),
         time_to_expiry_years=time_to_expiry_years(ts, expiry),
         underlying_price=underlying_price,
+        implied_forward_price=_implied_forward_anchor_price(snap),
         mark_iv=_atm_mark_iv(snap),
     )
 
@@ -308,7 +317,7 @@ class VisionOptionsClient:
 
         Returns board name, exchange, expiration date, snapshot time, year fraction
         to expiry (Deribit expiry at 08:00 UTC, divisor 365.25), underlying price,
-        and ATM ``markIv``.
+        implied forward price from the smile anchor, and ATM ``markIv``.
         """
         return _snapshot_info_from_dataframe(snap)
 
@@ -340,15 +349,13 @@ class VisionOptionsClient:
             smile = smile.loc[smile['moneyness'] <= max_moneyness]
         return smile.sort_values('moneyness').reset_index(drop=True)
 
-    def implied_forward_price(self, smile: pd.DataFrame) -> ImpliedForwardPrice:
-        """Estimate forward price from the volatility smile minimum.
+    def implied_forward_model(self, smile: pd.DataFrame) -> ImpliedForwardModel:
+        """Fit a quadratic smile and return an implied-forward model.
 
-        Fits ``markIv`` vs ``log(strike)`` with a quadratic, finds the analytic
-        minimum, and returns the corresponding price — even when it falls between
-        listed strikes. Compare ``snapshot_underlying_price`` on the result with
-        the board's ``underlyingPrice`` to see index vs forward divergence.
+        The model includes the anchor price (smile minimum), fitted mark IV at
+        that point, and the snapshot ``underlyingPrice`` for comparison.
         """
-        return implied_forward_price_from_smile(smile)
+        return implied_forward_model_from_smile(smile)
 
     def get_snapshots(
         self,
