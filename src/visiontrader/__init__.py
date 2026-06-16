@@ -1,5 +1,6 @@
 """Official Python client for the VisionTrader market data API."""
 
+from visiontrader.auth import setup_key
 from visiontrader.exceptions import ApiError, SnapshotError, ValidationError, VisionTraderError
 from visiontrader.models import Expiry, OptionLeg, OptionsSnapshot, SnapshotInfo
 from visiontrader.smile_analytics import ImpliedForwardModel
@@ -19,6 +20,7 @@ __all__ = [
     'VisionOptionsClient',
     'VisionTraderError',
     '__version__',
+    'setup_key',
     'vision_options_client',
 ]
 
