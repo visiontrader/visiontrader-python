@@ -56,9 +56,9 @@ def _format_keys_table(keys: list[StoredKey], *, default_key_id: str | None) -> 
         )
 
     widths = [
-        max(len(headers[0]), *(len(row[0]) for row in rows), default=0),
-        max(len(headers[1]), *(len(row[1]) for row in rows), default=0),
-        max(len(headers[2]), *(len(row[2]) for row in rows), default=0),
+        max([len(headers[0]), *(len(row[0]) for row in rows)]),
+        max([len(headers[1]), *(len(row[1]) for row in rows)]),
+        max([len(headers[2]), *(len(row[2]) for row in rows)]),
     ]
     lines = [
         f'{headers[0]:<{widths[0]}}  {headers[1]:<{widths[1]}}  {headers[2]}',
