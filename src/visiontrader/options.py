@@ -8,8 +8,9 @@ from typing import Literal
 import httpx
 import pandas as pd
 
-from visiontrader._http import DEFAULT_TIMEOUT, HttpClient, unwrap_data
-from visiontrader.exceptions import SnapshotError
+from visiontrader import auth
+from visiontrader._credentials import display_path, key_file_path, mask_private_key
+from visiontrader.exceptions import SnapshotError, VisionTraderError
 from visiontrader.models import (
     OptionsSnapshot,
     SnapshotInfo,
@@ -186,7 +187,32 @@ class VisionOptionsClient:
         timeout: float = DEFAULT_TIMEOUT,
         client: httpx.Client | None = None,
     ) -> None:
+        self._auth_key_id: str | None = None
+        self._auth_private_key: str | None = None
         self._http = HttpClient(base_url, timeout=timeout, client=client)
+        try:
+            self.login()
+        except VisionTraderError:
+            pass
+
+    def login(self, key_id: str | None = None) -> None:
+        """
+        Load API credentials from ``~/.visiontrader/auth_keys`` into this client instance.
+
+        Parameters
+        ----------
+        key_id:
+            API key identifier (``key_...``). When omitted, the default key is used.
+        """
+        if key_id is None:
+            loaded_key_id, private_key = auth.get_default_key()
+        else:
+            loaded_key_id, private_key = auth.get_key(key_id)
+
+        self._auth_key_id = loaded_key_id
+        self._auth_private_key = private_key
+        key_path = display_path(key_file_path(loaded_key_id))
+        print(f"✓ Using private key '{mask_private_key(private_key)}' from {key_path}")
 
     def close(self) -> None:
         self._http.close()

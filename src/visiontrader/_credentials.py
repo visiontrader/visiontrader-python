@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -75,6 +76,20 @@ def mask_private_key(key: str) -> str:
     return f'{prefix}{visible}*****'
 
 
+def key_file_placed_at(path: Path) -> datetime:
+    """Local date/time when the key file was last modified on disk."""
+    stat = path.stat()
+    local_time = time.localtime(stat.st_mtime)
+    return datetime(
+        local_time.tm_year,
+        local_time.tm_mon,
+        local_time.tm_mday,
+        local_time.tm_hour,
+        local_time.tm_min,
+        local_time.tm_sec,
+    )
+
+
 def write_key_file(key_id: str, *, private_key: str) -> Path:
     path = key_file_path(key_id)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -112,8 +127,9 @@ def read_key_file(key_id: str) -> tuple[str, str]:
 def list_stored_keys() -> list[StoredKey]:
     stored: list[StoredKey] = []
     for key_id in list_auth_key_ids():
+        path = key_file_path(key_id)
         _, private_key = read_key_file(key_id)
-        placed_at = datetime.fromtimestamp(key_file_path(key_id).stat().st_mtime)
+        placed_at = key_file_placed_at(path)
         stored.append(StoredKey(key_id=key_id, private_key=private_key, placed_at=placed_at))
     return stored
 

@@ -8,6 +8,7 @@ from visiontrader._credentials import (
     ensure_default_key_file,
     list_stored_keys,
     mask_private_key,
+    read_key_file,
     remove_key_file,
     validate_key_id,
     validate_private_key,
@@ -73,6 +74,43 @@ def remove_key(key_id: str) -> None:
     validate_key_id(key_id)
     remove_key_file(key_id)
     print(f'✓ Removed key {key_id}')
+
+
+def get_key(key_id: str) -> tuple[str, str]:
+    """
+    Load a validated API key pair from ``~/.visiontrader/auth_keys/<key_id>``.
+
+    Returns
+    -------
+    tuple[str, str]
+        ``(key_id, private_key)``
+    """
+    validate_key_id(key_id)
+    return read_key_file(key_id)
+
+
+def get_default_key() -> tuple[str, str]:
+    """
+    Load the default API key pair from ``~/.visiontrader/auth_keys``.
+
+    Uses ``default_key`` when present; otherwise creates it from the first stored key.
+
+    Returns
+    -------
+    tuple[str, str]
+        ``(key_id, private_key)``
+
+    Raises
+    ------
+    VisionTraderError
+        If no API keys are installed.
+    """
+    default_key_id = ensure_default_key_file()
+    if default_key_id is None:
+        raise VisionTraderError(
+            'No API key found in ~/.visiontrader/auth_keys. Run vt.setup_key(key, key_id) first.'
+        )
+    return read_key_file(default_key_id)
 
 
 def _format_keys_table(keys: list[StoredKey], *, default_key_id: str | None) -> str:

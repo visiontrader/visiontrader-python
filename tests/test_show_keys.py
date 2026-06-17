@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from visiontrader._credentials import StoredKey, write_default_key_id, write_key_file
+from visiontrader._credentials import StoredKey, key_file_placed_at, list_stored_keys, write_default_key_id, write_key_file
 from visiontrader.auth import _format_keys_table, show_keys
 
 
@@ -43,6 +43,18 @@ def test_show_keys_prints_message_when_no_keys(
 ) -> None:
     show_keys()
     assert capsys.readouterr().out.strip() == 'No API keys installed.'
+
+
+def test_list_stored_keys_placed_at_matches_file_mtime(
+    isolated_home: Path,
+    test_credentials: tuple[str, str],
+) -> None:
+    private_key, key_id = test_credentials
+    path = write_key_file(key_id, private_key=private_key)
+
+    stored = list_stored_keys()[0]
+    assert stored.placed_at == key_file_placed_at(path)
+    assert stored.placed_at.strftime('%Y-%m-%d %H:%M') == key_file_placed_at(path).strftime('%Y-%m-%d %H:%M')
 
 
 def test_format_keys_table_aligns_columns() -> None:
