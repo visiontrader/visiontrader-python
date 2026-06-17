@@ -45,8 +45,14 @@ class HttpClient:
     def __exit__(self, *args: object) -> None:
         self.close()
 
-    def get_json(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        response = self._client.get(path, params=params, timeout=self._timeout)
+    def get_json(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        response = self._client.get(path, params=params, headers=headers, timeout=self._timeout)
         return _parse_response(response)
 
 

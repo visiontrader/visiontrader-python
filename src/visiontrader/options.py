@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 import pandas as pd
 
-from visiontrader import auth
+import visiontrader.auth as auth
+from visiontrader._auth_signing import build_snapshot_auth_headers
 from visiontrader._credentials import display_path, key_file_path, mask_private_key
 from visiontrader._http import DEFAULT_TIMEOUT, HttpClient, unwrap_data
 from visiontrader.exceptions import SnapshotError, VisionTraderError
@@ -213,7 +214,23 @@ class VisionOptionsClient:
         self._auth_key_id = loaded_key_id
         self._auth_private_key = private_key
         key_path = display_path(key_file_path(loaded_key_id))
-        print(f"✓ Using private key '{mask_private_key(private_key)}' from {key_path}")
+        print(f"✓ Options client will be using private key '{mask_private_key(private_key)}' from {key_path}")
+
+    def _snapshot_headers(
+        self,
+        *,
+        path: str,
+        params: dict[str, Any] | None,
+    ) -> dict[str, str] | None:
+        if self._auth_key_id is None or self._auth_private_key is None:
+            return None
+        return build_snapshot_auth_headers(
+            key_id=self._auth_key_id,
+            private_key=self._auth_private_key,
+            method='GET',
+            path=path,
+            params=params,
+        )
 
     def close(self) -> None:
         self._http.close()
@@ -321,15 +338,17 @@ class VisionOptionsClient:
             expiry,
         )
         resolved_ts = resolve_ts(ts)
+        params = {
+            'exchange': exchange,
+            'instrument': instrument,
+            'expiry': _format_date(resolved_expiry),
+            'ts': _format_ts(resolved_ts),
+            'resolution': resolution,
+        }
         body = self._http.get_json(
             '/options/snapshot',
-            params={
-                'exchange': exchange,
-                'instrument': instrument,
-                'expiry': _format_date(resolved_expiry),
-                'ts': _format_ts(resolved_ts),
-                'resolution': resolution,
-            },
+            params=params,
+            headers=self._snapshot_headers(path='/options/snapshot', params=params),
         )
         raw = unwrap_data(body)
         if raw is None:
@@ -399,15 +418,17 @@ class VisionOptionsClient:
         **3–5 minutes**. Use ``VisionOptionsClient(timeout=360)`` or higher and
         matching proxy limits.
         """
+        params = {
+            'exchange': exchange,
+            'instrument': instrument,
+            'expiry': _format_date(expiry),
+            'date': _format_date(on_date),
+            'resolution': resolution,
+        }
         body = self._http.get_json(
             '/options/snapshots',
-            params={
-                'exchange': exchange,
-                'instrument': instrument,
-                'expiry': _format_date(expiry),
-                'date': _format_date(on_date),
-                'resolution': resolution,
-            },
+            params=params,
+            headers=self._snapshot_headers(path='/options/snapshots', params=params),
         )
         items = unwrap_data(body) or []
         return [snapshot_from_json(item) for item in items]

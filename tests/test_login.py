@@ -58,7 +58,7 @@ def test_login_loads_default_key(isolated_home: Path, capsys: pytest.CaptureFixt
     assert client._auth_key_id == 'key_abc123'
     assert client._auth_private_key == 'vt_sk_live_abc123payloadvalue'
     output = capsys.readouterr().out
-    assert "Using private key 'vt_sk_live_abc12*****'" in output
+    assert "Options client will be using private key 'vt_sk_live_abc12*****'" in output
     assert '~/.visiontrader/auth_keys/key_abc123' in output
 
 
