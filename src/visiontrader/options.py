@@ -10,6 +10,7 @@ import pandas as pd
 
 from visiontrader import auth
 from visiontrader._credentials import display_path, key_file_path, mask_private_key
+from visiontrader._http import DEFAULT_TIMEOUT, HttpClient, unwrap_data
 from visiontrader.exceptions import SnapshotError, VisionTraderError
 from visiontrader.models import (
     OptionsSnapshot,
