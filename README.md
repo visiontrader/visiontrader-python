@@ -7,7 +7,8 @@ Historical options data is available five minutes after market events occur.
 Analyze volatility smiles, term structures, open interest, and option market dynamics directly from pandas DataFrames.
 
 **Why VisionTrader:**
-
+- Deribit options and L2 exchange data history since 2021
+- Access to current and historical data in a unified format
 - Option boards returned directly as Pandas DataFrames
 - Exchange-normalized implied volatility values
 - Designed for Jupyter notebooks and quantitative research
@@ -41,18 +42,27 @@ In [1]:
 
 ```python
 import pandas as pd
-from visiontrader import VisionOptionsClient
+import visiontrader as vt
 from visiontrader.plots import plot_smile
-
-vt = VisionOptionsClient()
+vt_options = vt.VisionOptionsClient(base_url='http://192.168.1.100:5259')
 ```
 
-**Fetch a snapshot of the options board and view its main structure.** A snapshot is the full options board at one timestamp; `get_snapshot` returns it as `snap`, a pandas DataFrame where each row is one option leg (call or put) at a given strike. See the [Tutorial](#alternative-snapshot-arguments-expiry-aliases-and-relative-timestamps) for how `next_*` expiry aliases and relative `ts` work.
+**Optional — save API credentials.** Skip this cell for a quick first look: discovery and limited anonymous snapshot access work without registration. When you register at [visiontrader.io](https://visiontrader.io) and receive an `api_key_id` and `secret_key`, run `setup_key` once, then **re-run the cell above** so the client picks up the saved key automatically.
 
 In [2]:
 
 ```python
-snap = vt.get_snapshot(exchange='deribit', instrument="BTC", expiry="next_weekly", ts="-5m")
+vt.setup_key(api_key_id="key_t8Kw3Nmj", secret_key="vt_sk_live_q0zfM9xRGjzFViU1K1xVI8qeVcZn6vxdYKNKx8HD5xg")
+```
+
+✓ Secret key saved to ~/.visiontrader/auth_keys/key_t8Kw3Nmj (permissions 600)
+
+**Fetch a snapshot of the options board and view its main structure.** A snapshot is the full options board at one timestamp; `get_snapshot` returns it as `snap`, a pandas DataFrame where each row is one option leg (call or put) at a given strike. See the [Tutorial](#alternative-snapshot-arguments-expiry-aliases-and-relative-timestamps) for how `next_`* expiry aliases and relative `ts` work.
+
+In [3]:
+
+```python
+snap = vt_options.get_snapshot(exchange='deribit', instrument="BTC", expiry="next_weekly", ts="-5m")
 snap.loc[:, ['symbol', 'strike', 'moneyness', 'type', 'bid', 'ask', 'markPrice', 'markIv', 'oi']].head(6)
 ```
 
@@ -70,7 +80,7 @@ snap.loc[:, ['symbol', 'strike', 'moneyness', 'type', 'bid', 'ask', 'markPrice',
 
 `plot_smile` draws the smile as-is from the raw snapshot — no `filter_for_smile`, no metric panels. The subtitle uses the first row's option type (usually `call`).
 
-In [3]:
+In [4]:
 
 ```python
 plot_smile(snap)
@@ -86,10 +96,10 @@ plot_smile(snap)
 2. Recompute moneyness from a custom underlying price (`underlying_price=67000`).
 3. Trim the smile wings by moneyness (`min_moneyness=0.80`, `max_moneyness=1.17`).
 
-In [4]:
+In [5]:
 
 ```python
-smile = vt.filter_for_smile(snap, 'put', underlying_price = 67000,  min_moneyness = 0.80, max_moneyness = 1.17 )
+smile = vt_options.filter_for_smile(snap, 'put', underlying_price = 67000,  min_moneyness = 0.80, max_moneyness = 1.17 )
 plot_smile(smile)
 ```
 
@@ -99,7 +109,7 @@ plot_smile(smile)
 
 **Add open interest, spread, and ask/bid levels** — `oi` and `spread` panels below the smile, plus `askbid` markers on the main chart (ask/bid IV via naive scaling from mark price).
 
-In [5]:
+In [6]:
 
 ```python
 plot_smile(smile, with_metrics=['oi', 'spread', 'askbid'])
@@ -123,7 +133,9 @@ import pandas as pd
 from visiontrader import VisionOptionsClient
 vision_options = VisionOptionsClient()  # VisionOptionsClient(base_url='https://api.example.com')
 ```
-<br>
+
+  
+
 
 **List exchanges that provide options data** (the client requests only the options-capable subset).
 
@@ -136,7 +148,9 @@ vision_options.list_exchanges()
 ```python
 ['deribit']
 ```
-<br>
+
+  
+
 
 **Getting list symbols with option boards on Deribit** — not the exchange’s full instrument list, only names where historical options data is available.
 
@@ -159,7 +173,9 @@ vision_options.list_instruments('deribit')
     'XRP_USDC',
 ]
 ```
-<br>
+
+  
+
 
 **Fetch expiry dates and settlement period types for BTC** (`tail` shows the last rows when the list is long).
 
@@ -194,7 +210,9 @@ vision_options.list_expiries('deribit', 'BTC').tail(22).reset_index(drop=True)
 20 2026-12-25             month
 21 2027-03-26             month
 ```
-<br>
+
+  
+
 
 **Show calendar dates on which snapshot data exists for the selected expiry.**
 
@@ -212,7 +230,9 @@ vision_options.list_dates('deribit', 'BTC', '2026-06-04')
 3    2026-06-03
 4    2026-06-04
 ```
-<br>
+
+  
+
 
 **Load a single options board at a given timestamp.** Returns a DataFrame: snapshot fields (`exchange`, `underlying`, `expiry`, `ts`, `underlyingPrice`) on every row, plus strike-level `moneyness` (`strike / underlyingPrice`), bid/ask, mark, IV, and OI.
 
@@ -232,7 +252,9 @@ snap.head(6)
 4   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-63000-C   63000     0.9410  call  0.0555  0.0640     0.0595  0.7652   NaN
 5   deribit       BTC  2026-06-04 2026-06-03 12:00:00+00:00         66948.82  BTC-4JUN26-63000-P   63000     0.9410   put  0.0006  0.0008     0.0007  0.7652  92.3
 ```
-<br>
+
+  
+
 
 ### Alternative snapshot arguments (expiry aliases and relative timestamps)
 
@@ -257,9 +279,10 @@ In [7]:
 snap = vision_options.get_snapshot(exchange='deribit', instrument='BTC', expiry='next_weekly', ts='-5m')
 ```
 
-<small><em>In the beta release, this request can take more than 1.5 minutes.</em></small>
+*In the beta release, this request can take more than 1.5 minutes.*
 
-<br>
+  
+
 
 **Filter by moneyness** to see how far each leg is from at-the-money (`moneyness ≈ 1.0`). The column is computed in the SDK — filter by moneyness, not by absolute strikes, to keep only legs near ATM on any board.
 
@@ -282,7 +305,9 @@ snap.loc[snap['moneyness'].between(0.98, 1.02), ['symbol', 'type', 'strike', 'un
 34  BTC-4JUN26-68000-C  call   68000         66948.82     1.0156  0.4685
 35  BTC-4JUN26-68000-P   put   68000         66948.82     1.0156  0.4685
 ```
-<br>
+
+  
+
 
 **Manually plot the volatility smile from the same snapshot.** On Deribit `markIv` is the same per strike for calls and puts — one line per strike is enough.
 
@@ -315,24 +340,25 @@ plt.show()
 
 ![BTC vol smile — Deribit 4JUN26 @ 2026-06-03 12:00 UTC](docs/images/vol_smile.png)
 
-<small><em>Why `moneyness ≤ 1.13`? Past ~1.14, `markIv` plateaus (~0.85) while quotes vanish on calls — Deribit mark extrapolation, not market smile. The filter keeps the liquid part of the curve.</em></small>
-
+*Why `moneyness ≤ 1.13`? Past ~1.14, `markIv` plateaus (~0.85) while quotes vanish on calls — Deribit mark extrapolation, not market smile. The filter keeps the liquid part of the curve.*
 
 ## API coverage (v0.1)
 
-| Method | HTTP |
-|--------|------|
-| `list_exchanges()` | `GET /exchanges?type=options` |
-| `list_instruments(exchange)` | `GET options/instruments` |
-| `list_expiries(exchange, instrument, tradeable_only=...)` | `GET options/expiries` → DataFrame |
-| `list_dates(exchange, instrument, expiry)` | `GET options/dates` → DataFrame |
-| `get_snapshot(...)` | `GET /options/snapshot` → DataFrame |
-| `filter_for_smile(snap, type, min_moneyness=..., max_moneyness=..., underlying_price=...)` | filter snapshot → smile-ready DataFrame |
-| `get_snapshots(..., on_date=...)` | `GET /options/snapshots` |
-| `snapshots_to_dataframe(...)` | `GET /options/snapshots` → DataFrame |
-| `plot_smile(smile, with_metrics=...)` | vol smile plot → `(fig, ax)` or `(fig, axes)` |
 
-Query parameter for the board instrument is **`instrument`**.
+| Method                                                                                     | HTTP                                          |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| `list_exchanges()`                                                                         | `GET /exchanges?type=options`                 |
+| `list_instruments(exchange)`                                                               | `GET options/instruments`                     |
+| `list_expiries(exchange, instrument, tradeable_only=...)`                                  | `GET options/expiries` → DataFrame            |
+| `list_dates(exchange, instrument, expiry)`                                                 | `GET options/dates` → DataFrame               |
+| `get_snapshot(...)`                                                                        | `GET /options/snapshot` → DataFrame           |
+| `filter_for_smile(snap, type, min_moneyness=..., max_moneyness=..., underlying_price=...)` | filter snapshot → smile-ready DataFrame       |
+| `get_snapshots(..., on_date=...)`                                                          | `GET /options/snapshots`                      |
+| `snapshots_to_dataframe(...)`                                                              | `GET /options/snapshots` → DataFrame          |
+| `plot_smile(smile, with_metrics=...)`                                                      | vol smile plot → `(fig, ax)` or `(fig, axes)` |
+
+
+Query parameter for the board instrument is `**instrument*`*.
 
 `get_snapshot` defaults to `exchange='deribit'`, accepts expiry aliases
 (`next_daily`, `next_weekly`, `next_monthly`, `next_quarterly`) and relative timestamps
