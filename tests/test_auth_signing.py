@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from visiontrader._auth_signing import build_canonical_string, build_snapshot_auth_headers, canonicalize_query
-from visiontrader._credentials import write_default_key_id, write_key_file
+from visiontrader._credentials import write_default_api_key_id, write_key_file
 from visiontrader.options import VisionOptionsClient
 
 
@@ -19,7 +19,7 @@ def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def _test_private_key() -> str:
+def _test_secret_key() -> str:
     seed = b'\x01' * 32
     payload = base64.urlsafe_b64encode(seed).rstrip(b'=').decode('ascii')
     return f'vt_sk_live_{payload}'
@@ -50,8 +50,8 @@ def test_build_canonical_string_matches_spec_shape() -> None:
 def test_build_snapshot_auth_headers_contains_required_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr('visiontrader._auth_signing.time.time', lambda: 1718467200.0)
     headers = build_snapshot_auth_headers(
-        key_id='key_abc123',
-        private_key=_test_private_key(),
+        api_key_id='key_abc123',
+        secret_key=_test_secret_key(),
         method='GET',
         path='/options/snapshot',
         params={'exchange': 'deribit', 'underlying': 'BTC'},
@@ -66,8 +66,8 @@ def test_snapshot_headers_added_only_after_login(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr('visiontrader._auth_signing.time.time', lambda: 1718467200.0)
-    write_key_file('key_abc123', private_key=_test_private_key())
-    write_default_key_id('key_abc123')
+    write_key_file('key_abc123', secret_key=_test_secret_key())
+    write_default_api_key_id('key_abc123')
 
     client = VisionOptionsClient(client=httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={'data': []}))))
     headers = client._snapshot_headers(
@@ -78,6 +78,6 @@ def test_snapshot_headers_added_only_after_login(
     assert headers['X-VT-Key-Id'] == 'key_abc123'
 
     client_no_key = VisionOptionsClient(client=httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={'data': []}))))
-    client_no_key._auth_key_id = None
-    client_no_key._auth_private_key = None
+    client_no_key._auth_api_key_id = None
+    client_no_key._auth_secret_key = None
     assert client_no_key._snapshot_headers(path='/options/snapshot', params={'exchange': 'deribit'}) is None

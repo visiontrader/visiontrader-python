@@ -10,6 +10,6 @@ import pytest
 
 @pytest.fixture
 def test_credentials() -> tuple[str, str]:
-    """Generate a format-valid test private key and key_id."""
+    """Generate a format-valid test api_key_id and secret_key."""
     payload = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b'=').decode('ascii')
-    return f'vt_sk_live_{payload}', f'key_{secrets.token_hex(6)}'
+    return f'key_{secrets.token_hex(6)}', f'vt_sk_live_{payload}'

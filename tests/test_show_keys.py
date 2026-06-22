@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from visiontrader._credentials import StoredKey, key_file_placed_at, list_stored_keys, write_default_key_id, write_key_file
+from visiontrader._credentials import StoredKey, key_file_placed_at, list_stored_keys, write_default_api_key_id, write_key_file
 from visiontrader.auth import _format_keys_table, show_keys
 
 
@@ -21,15 +21,15 @@ def test_show_keys_prints_table_with_default_marker(
     isolated_home: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    write_key_file('key_testlocal01', private_key='vt_sk_live_dGVzdEtleUZvckxvY2Fs')
-    write_key_file('key_abc123', private_key='vt_sk_live_abc123payloadvalue')
-    write_default_key_id('key_abc123')
+    write_key_file('key_testlocal01', secret_key='vt_sk_live_dGVzdEtleUZvckxvY2Fs')
+    write_key_file('key_abc123', secret_key='vt_sk_live_abc123payloadvalue')
+    write_default_api_key_id('key_abc123')
 
     show_keys()
     output = capsys.readouterr().out
 
-    assert 'key_id' in output
-    assert 'private_key' in output
+    assert 'api_key_id' in output
+    assert 'secret_key' in output
     assert 'placed_time' in output
     assert 'key_testlocal01' in output
     assert 'key_abc123*' in output
@@ -49,8 +49,8 @@ def test_list_stored_keys_placed_at_matches_file_mtime(
     isolated_home: Path,
     test_credentials: tuple[str, str],
 ) -> None:
-    private_key, key_id = test_credentials
-    path = write_key_file(key_id, private_key=private_key)
+    api_key_id, secret_key = test_credentials
+    path = write_key_file(api_key_id, secret_key=secret_key)
 
     stored = list_stored_keys()[0]
     assert stored.placed_at == key_file_placed_at(path)
@@ -64,11 +64,11 @@ def test_format_keys_table_aligns_columns() -> None:
             StoredKey('key_testlocal01', 'vt_sk_live_dGVzdEtleUZvckxvY2Fs', placed),
             StoredKey('key_abc123', 'vt_sk_live_abc123payloadvalue', placed),
         ],
-        default_key_id='key_abc123',
+        default_api_key_id='key_abc123',
     )
     lines = table.splitlines()
     assert len(lines) == 3
-    assert lines[0].startswith('key_id')
+    assert lines[0].startswith('api_key_id')
     assert 'key_abc123*' in lines[2]
     assert '2026-06-14 14:58' in lines[1]
     assert '2026-06-14 14:58' in lines[2]

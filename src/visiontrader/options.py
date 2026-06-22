@@ -10,7 +10,7 @@ import pandas as pd
 
 import visiontrader.auth as auth
 from visiontrader._auth_signing import build_snapshot_auth_headers
-from visiontrader._credentials import display_path, key_file_path, mask_private_key
+from visiontrader._credentials import display_path, key_file_path, mask_secret_key
 from visiontrader._http import DEFAULT_TIMEOUT, HttpClient, unwrap_data
 from visiontrader.exceptions import SnapshotError, VisionTraderError
 from visiontrader.models import (
@@ -189,32 +189,34 @@ class VisionOptionsClient:
         timeout: float = DEFAULT_TIMEOUT,
         client: httpx.Client | None = None,
     ) -> None:
-        self._auth_key_id: str | None = None
-        self._auth_private_key: str | None = None
+        self._auth_api_key_id: str | None = None
+        self._auth_secret_key: str | None = None
         self._http = HttpClient(base_url, timeout=timeout, client=client)
         try:
             self.login()
         except VisionTraderError:
             pass
 
-    def login(self, key_id: str | None = None) -> None:
+    def login(self, api_key_id: str | None = None) -> None:
         """
         Load API credentials from ``~/.visiontrader/auth_keys`` into this client instance.
 
         Parameters
         ----------
-        key_id:
+        api_key_id:
             API key identifier (``key_...``). When omitted, the default key is used.
         """
-        if key_id is None:
-            loaded_key_id, private_key = auth.get_default_key()
+        if api_key_id is None:
+            loaded_api_key_id, secret_key = auth.get_default_key()
         else:
-            loaded_key_id, private_key = auth.get_key(key_id)
+            loaded_api_key_id, secret_key = auth.get_key(api_key_id)
 
-        self._auth_key_id = loaded_key_id
-        self._auth_private_key = private_key
-        key_path = display_path(key_file_path(loaded_key_id))
-        print(f"✓ Options client will be using private key '{mask_private_key(private_key)}' from {key_path}")
+        self._auth_api_key_id = loaded_api_key_id
+        self._auth_secret_key = secret_key
+        key_path = display_path(key_file_path(loaded_api_key_id))
+        print(
+            f"✓ Options client will be using secret key '{mask_secret_key(secret_key)}' from {key_path}"
+        )
 
     def _snapshot_headers(
         self,
@@ -222,11 +224,11 @@ class VisionOptionsClient:
         path: str,
         params: dict[str, Any] | None,
     ) -> dict[str, str] | None:
-        if self._auth_key_id is None or self._auth_private_key is None:
+        if self._auth_api_key_id is None or self._auth_secret_key is None:
             return None
         return build_snapshot_auth_headers(
-            key_id=self._auth_key_id,
-            private_key=self._auth_private_key,
+            api_key_id=self._auth_api_key_id,
+            secret_key=self._auth_secret_key,
             method='GET',
             path=path,
             params=params,
