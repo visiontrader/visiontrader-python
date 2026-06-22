@@ -9,7 +9,7 @@ import httpx
 import pandas as pd
 
 import visiontrader.auth as auth
-from visiontrader._auth_signing import build_snapshot_auth_headers
+from visiontrader._auth_signing import build_auth_headers
 from visiontrader._credentials import display_path, key_file_path, mask_secret_key
 from visiontrader._http import DEFAULT_TIMEOUT, HttpClient, unwrap_data
 from visiontrader.exceptions import SnapshotError, VisionTraderError
@@ -180,6 +180,10 @@ class VisionOptionsClient:
 
     HTTP requests use a default ``timeout`` of 240 seconds (4 minutes); pass a
     lower value to ``VisionOptionsClient(timeout=...)`` if needed.
+
+    When API credentials are loaded (auto-login or ``login()``), all HTTP
+    requests include Ed25519 signature headers (``X-VT-Key-Id``,
+    ``X-VT-Timestamp``, ``X-VT-Signature``).
     """
 
     def __init__(
@@ -218,7 +222,10 @@ class VisionOptionsClient:
             f"✓ Options client will be using secret key '{mask_secret_key(secret_key)}' from {key_path}"
         )
 
-    def _snapshot_headers(
+    def _normalize_path(self, path: str) -> str:
+        return path if path.startswith('/') else f'/{path}'
+
+    def _auth_headers(
         self,
         *,
         path: str,
@@ -226,12 +233,24 @@ class VisionOptionsClient:
     ) -> dict[str, str] | None:
         if self._auth_api_key_id is None or self._auth_secret_key is None:
             return None
-        return build_snapshot_auth_headers(
+        return build_auth_headers(
             api_key_id=self._auth_api_key_id,
             secret_key=self._auth_secret_key,
             method='GET',
-            path=path,
+            path=self._normalize_path(path),
             params=params,
+        )
+
+    def _get_json(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        normalized_path = self._normalize_path(path)
+        return self._http.get_json(
+            normalized_path,
+            params=params,
+            headers=self._auth_headers(path=normalized_path, params=params),
         )
 
     def close(self) -> None:
@@ -245,12 +264,12 @@ class VisionOptionsClient:
 
     def list_exchanges(self) -> list[str]:
         """GET /exchanges?type=options — exchanges that provide options data."""
-        body = self._http.get_json('/exchanges', params={'type': 'options'})
+        body = self._get_json('/exchanges', params={'type': 'options'})
         return list(unwrap_data(body))
 
     def list_instruments(self, exchange: str) -> list[str]:
         """GET options/instruments."""
-        body = self._http.get_json(
+        body = self._get_json(
             'options/instruments',
             params={'exchange': exchange},
         )
@@ -274,7 +293,7 @@ class VisionOptionsClient:
         }
         if tradeable_only is not None:
             params['tradeableOnly'] = tradeable_only
-        body = self._http.get_json('options/expiries', params=params)
+        body = self._get_json('options/expiries', params=params)
         items = [expiry_from_json(item) for item in unwrap_data(body)]
         return pd.DataFrame(
             [{'expiry': e.expiry, 'settlement_period': e.settlement_period} for e in items],
@@ -283,7 +302,7 @@ class VisionOptionsClient:
 
     def list_dates(self, exchange: str, instrument: str, expiry: date | str) -> pd.DataFrame:
         """GET options/dates — column: ``available dates``."""
-        body = self._http.get_json(
+        body = self._get_json(
             'options/dates',
             params={
                 'exchange': exchange,
@@ -347,11 +366,7 @@ class VisionOptionsClient:
             'ts': _format_ts(resolved_ts),
             'resolution': resolution,
         }
-        body = self._http.get_json(
-            '/options/snapshot',
-            params=params,
-            headers=self._snapshot_headers(path='/options/snapshot', params=params),
-        )
+        body = self._get_json('/options/snapshot', params=params)
         raw = unwrap_data(body)
         if raw is None:
             raise SnapshotError('Empty snapshot data')
@@ -427,11 +442,7 @@ class VisionOptionsClient:
             'date': _format_date(on_date),
             'resolution': resolution,
         }
-        body = self._http.get_json(
-            '/options/snapshots',
-            params=params,
-            headers=self._snapshot_headers(path='/options/snapshots', params=params),
-        )
+        body = self._get_json('/options/snapshots', params=params)
         items = unwrap_data(body) or []
         return [snapshot_from_json(item) for item in items]
 

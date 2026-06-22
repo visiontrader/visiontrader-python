@@ -1,4 +1,4 @@
-"""Request signing helpers for VisionTrader snapshot endpoints."""
+"""Request signing helpers for VisionTrader API endpoints."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from visiontrader.exceptions import VisionTraderError
 EMPTY_BODY_SHA256_HEX = hashlib.sha256(b'').hexdigest()
 
 
-def build_snapshot_auth_headers(
+def build_auth_headers(
     *,
     api_key_id: str,
     secret_key: str,

@@ -6,7 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from visiontrader._auth_signing import build_canonical_string, build_snapshot_auth_headers, canonicalize_query
+from visiontrader._auth_signing import build_auth_headers, build_canonical_string, canonicalize_query
 from visiontrader._credentials import write_default_api_key_id, write_key_file
 from visiontrader.options import VisionOptionsClient
 
@@ -47,9 +47,9 @@ def test_build_canonical_string_matches_spec_shape() -> None:
     )
 
 
-def test_build_snapshot_auth_headers_contains_required_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_auth_headers_contains_required_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr('visiontrader._auth_signing.time.time', lambda: 1718467200.0)
-    headers = build_snapshot_auth_headers(
+    headers = build_auth_headers(
         api_key_id='key_abc123',
         secret_key=_test_secret_key(),
         method='GET',
@@ -61,7 +61,7 @@ def test_build_snapshot_auth_headers_contains_required_fields(monkeypatch: pytes
     assert len(headers['X-VT-Signature']) > 10
 
 
-def test_snapshot_headers_added_only_after_login(
+def test_auth_headers_added_only_after_login(
     isolated_home: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -70,7 +70,7 @@ def test_snapshot_headers_added_only_after_login(
     write_default_api_key_id('key_abc123')
 
     client = VisionOptionsClient(client=httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={'data': []}))))
-    headers = client._snapshot_headers(
+    headers = client._auth_headers(
         path='/options/snapshot',
         params={'exchange': 'deribit', 'underlying': 'BTC'},
     )
@@ -80,4 +80,42 @@ def test_snapshot_headers_added_only_after_login(
     client_no_key = VisionOptionsClient(client=httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={'data': []}))))
     client_no_key._auth_api_key_id = None
     client_no_key._auth_secret_key = None
-    assert client_no_key._snapshot_headers(path='/options/snapshot', params={'exchange': 'deribit'}) is None
+    assert client_no_key._auth_headers(path='/options/snapshot', params={'exchange': 'deribit'}) is None
+
+
+def test_list_exchanges_sends_auth_headers_when_logged_in(
+    isolated_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr('visiontrader._auth_signing.time.time', lambda: 1718467200.0)
+    write_key_file('key_abc123', secret_key=_test_secret_key())
+    write_default_api_key_id('key_abc123')
+
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(200, json={'data': ['deribit']})
+
+    client = VisionOptionsClient(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert client.list_exchanges() == ['deribit']
+    assert len(captured) == 1
+    assert captured[0].headers['X-VT-Key-Id'] == 'key_abc123'
+    assert captured[0].headers['X-VT-Timestamp'] == '1718467200'
+    assert captured[0].headers['X-VT-Signature']
+
+
+def test_list_exchanges_omits_auth_headers_without_key(
+    isolated_home: Path,
+) -> None:
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(200, json={'data': ['deribit']})
+
+    client = VisionOptionsClient(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    client._auth_api_key_id = None
+    client._auth_secret_key = None
+    assert client.list_exchanges() == ['deribit']
+    assert 'X-VT-Key-Id' not in captured[0].headers
