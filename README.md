@@ -44,18 +44,22 @@ In [1]:
 import pandas as pd
 import visiontrader as vt
 from visiontrader.plots import plot_smile
-vt_options = vt.VisionOptionsClient(base_url='http://192.168.1.100:5259')
+vt_options = vt.VisionOptionsClient()
 ```
 
-**Optional — save API credentials.** Skip this cell for a quick first look: discovery and limited anonymous snapshot access work without registration. When you register at [visiontrader.io](https://visiontrader.io) and receive an `api_key_id` and `secret_key`, run `setup_key` once, then **re-run the cell above** so the client picks up the saved key automatically.
+**Optionally, register and set up for a free API key** at [www.visiontrader.io](https://www.visiontrader.io) for extended access. You can skip this step. Initial requests can be made without registration, though the number of requests is limited. Please keep this in mind.
 
 In [2]:
 
 ```python
 vt.setup_key(api_key_id="key_t8Kw3Nmj", secret_key="vt_sk_live_q0zfM9xRGjzFViU1K1xVI8qeVcZn6vxdYKNKx8HD5xg")
+# You will need to log in so the client uses the new key
+vt_options.login()
 ```
-
+<small>
 ✓ Secret key saved to ~/.visiontrader/auth_keys/key_t8Kw3Nmj (permissions 600)
+
+✓ Options client will be using secret key 'vt_sk_live_q0zfM*****' from ~/.visiontrader/auth_keys/key_t8Kw3Nmj</small>
 
 **Fetch a snapshot of the options board and view its main structure.** A snapshot is the full options board at one timestamp; `get_snapshot` returns it as `snap`, a pandas DataFrame where each row is one option leg (call or put) at a given strike. See the [Tutorial](#alternative-snapshot-arguments-expiry-aliases-and-relative-timestamps) for how `next_`* expiry aliases and relative `ts` work.
 
