@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import httpx
+
+from visiontrader._auth_signing import build_auth_headers
 from visiontrader._credentials import (
     StoredKey,
     display_path,
@@ -15,7 +18,11 @@ from visiontrader._credentials import (
     write_default_api_key_id,
     write_key_file,
 )
+from visiontrader._http import HttpClient, unwrap_data
+from visiontrader.exceptions import ApiError, VisionTraderError
 
+TEST_KEY_PATH = '/auth/test_key'
+TEST_KEY_TIMEOUT = 30.0
 
 def setup_key(api_key_id: str, secret_key: str) -> None:
     """
@@ -112,6 +119,77 @@ def get_default_key() -> tuple[str, str]:
             'Run vt.setup_key(api_key_id, secret_key) first.'
         )
     return read_key_file(default_api_key_id)
+
+
+def test_key(
+    api_key_id: str | None = None,
+    secret_key: str | None = None,
+    *,
+    base_url: str | None = None,
+    timeout: float = TEST_KEY_TIMEOUT,
+    client: httpx.Client | None = None,
+) -> None:
+    """
+    Verify API credentials against ``GET /auth/test_key`` (§7.10).
+
+    With no arguments, loads the default key from ``~/.visiontrader/auth_keys``.
+    With ``api_key_id`` and ``secret_key``, uses those credentials without saving them.
+
+    Parameters
+    ----------
+    api_key_id:
+        API key identifier (``key_...``). Omit with ``secret_key`` to use the default key.
+    secret_key:
+        Secret signing key (``vt_sk_live_...`` or ``vt_sk_test_...``).
+    base_url:
+        API base URL. Defaults to ``VT_API_BASE_URL`` or ``http://localhost:5259``.
+    timeout:
+        HTTP timeout in seconds.
+
+    Raises
+    ------
+    VisionTraderError
+        If arguments are inconsistent or no default key is installed.
+    ApiError
+        If the server rejects the key or returns an unexpected response.
+    """
+    if api_key_id is None and secret_key is None:
+        resolved_api_key_id, resolved_secret_key = get_default_key()
+    elif api_key_id is not None and secret_key is not None:
+        validate_api_key_id(api_key_id)
+        validate_secret_key(secret_key)
+        resolved_api_key_id = api_key_id
+        resolved_secret_key = secret_key
+    else:
+        raise VisionTraderError(
+            'test_key requires both api_key_id and secret_key, or neither to use the default key.'
+        )
+
+    headers = build_auth_headers(
+        api_key_id=resolved_api_key_id,
+        secret_key=resolved_secret_key,
+        method='GET',
+        path=TEST_KEY_PATH,
+        params=None,
+    )
+
+    with HttpClient(base_url, timeout=timeout, client=client) as http:
+        body = http.get_json(TEST_KEY_PATH, headers=headers)
+
+    data = unwrap_data(body)
+    if not isinstance(data, dict):
+        raise ApiError('Unexpected test_key response shape.')
+
+    if data.get('verify') != 'success':
+        raise ApiError(f"test_key failed: verify={data.get('verify')!r}")
+
+    returned_api_key_id = data.get('api_key_id')
+    if returned_api_key_id != resolved_api_key_id:
+        raise ApiError(
+            f'test_key api_key_id mismatch: expected {resolved_api_key_id!r}, got {returned_api_key_id!r}'
+        )
+
+    print(f"✓ API key '{resolved_api_key_id}' is valid")
 
 
 def _format_keys_table(keys: list[StoredKey], *, default_api_key_id: str | None) -> str:
