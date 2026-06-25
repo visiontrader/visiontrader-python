@@ -70,6 +70,34 @@ def _response_preview(response: httpx.Response, *, limit: int = 300) -> str:
     return f'{text[:limit]}...'
 
 
+def _format_error_message(body: dict[str, Any], *, fallback: str) -> str:
+    error = _response_error(body)
+    detail = body.get('message') or body.get('title') or body.get('detail')
+    detail_text = str(detail).strip() if detail is not None else ''
+    if error and detail_text and error != detail_text:
+        return f'{error}: {detail_text}'
+    if detail_text:
+        return detail_text
+    if error:
+        return error
+    return fallback
+
+
+def _raise_api_error(
+    body: dict[str, Any],
+    *,
+    status_code: int,
+    fallback: str,
+    exception_type: type[ApiError] = ApiError,
+) -> None:
+    raise exception_type(
+        _format_error_message(body, fallback=fallback),
+        status_code=status_code,
+        code=_response_code(body),
+        error_code=_response_error(body),
+    )
+
+
 def _parse_response(response: httpx.Response) -> dict[str, Any]:
     try:
         body: dict[str, Any] = response.json()
@@ -82,27 +110,25 @@ def _parse_response(response: httpx.Response) -> dict[str, Any]:
         ) from exc
 
     if response.status_code == 400:
-        message = str(body.get('error') or body.get('title') or 'Bad request')
-        raise ValidationError(
-            message,
+        _raise_api_error(
+            body,
             status_code=400,
-            code=_response_code(body),
+            fallback='Bad request',
+            exception_type=ValidationError,
         )
 
     if response.status_code >= 500:
-        detail = body.get('detail') or body.get('error') or response.reason_phrase
-        raise ApiError(
-            str(detail),
+        _raise_api_error(
+            body,
             status_code=response.status_code,
-            code=_response_code(body),
+            fallback=str(response.reason_phrase),
         )
 
     if response.status_code >= 400:
-        message = str(body.get('error') or body.get('title') or response.reason_phrase)
-        raise ApiError(
-            message,
+        _raise_api_error(
+            body,
             status_code=response.status_code,
-            code=_response_code(body),
+            fallback=str(response.reason_phrase),
         )
 
     response.raise_for_status()
@@ -128,6 +154,10 @@ def unwrap_data(body: dict[str, Any]) -> Any:
 
     error = _response_error(body)
     if error is not None:
-        raise ApiError(error, code=_response_code(body))
+        raise ApiError(
+            _format_error_message(body, fallback=error),
+            code=_response_code(body),
+            error_code=error,
+        )
 
     return body['data']

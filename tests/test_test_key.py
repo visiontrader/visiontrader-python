@@ -87,12 +87,21 @@ def test_test_key_requires_both_or_neither_credential() -> None:
 
 def test_test_key_raises_on_server_error() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(401, json={'error': 'invalid_signature', 'message': 'bad sig'})
+        return httpx.Response(
+            401,
+            json={
+                'error': 'invalid_signature',
+                'message': 'Detached signature must be 64 bytes (Ed25519).',
+            },
+        )
 
-    with pytest.raises(ApiError, match='invalid_signature'):
+    with pytest.raises(ApiError, match='invalid_signature: Detached signature must be 64 bytes') as exc_info:
         test_key(
             'key_abc123',
             _test_secret_key(),
             base_url='http://testserver',
             client=_mock_client(handler),
         )
+
+    assert exc_info.value.error_code == 'invalid_signature'
+    assert exc_info.value.status_code == 401

@@ -14,10 +14,12 @@ class ApiError(VisionTraderError):
         *,
         status_code: int | None = None,
         code: int | None = None,
+        error_code: str | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.code = code
+        self.error_code = error_code
 
 
 class ValidationError(ApiError):
