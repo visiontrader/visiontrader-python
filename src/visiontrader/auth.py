@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import httpx
 
 from visiontrader._auth_signing import build_auth_headers
@@ -18,7 +20,7 @@ from visiontrader._credentials import (
     write_default_api_key_id,
     write_key_file,
 )
-from visiontrader._http import HttpClient, unwrap_data
+from visiontrader._http import ENV_BASE_URL, HttpClient, unwrap_data
 from visiontrader.exceptions import ApiError, VisionTraderError
 
 TEST_KEY_PATH = '/auth/test_key'
@@ -174,7 +176,14 @@ def test_key(
     )
 
     with HttpClient(base_url, timeout=timeout, client=client) as http:
-        body = http.get_json(TEST_KEY_PATH, headers=headers)
+        try:
+            body = http.get_json(TEST_KEY_PATH, headers=headers)
+        except httpx.ConnectError as exc:
+            target = http.base_url if client is None else str(client.base_url).rstrip('/')
+            raise ApiError(
+                f'Could not connect to {target} for GET /auth/test_key. '
+                f'Pass base_url=... (the same URL as VisionOptionsClient) or set {ENV_BASE_URL}.'
+            ) from exc
 
     data = unwrap_data(body)
     if not isinstance(data, dict):

@@ -27,9 +27,14 @@ class HttpClient:
         client: httpx.Client | None = None,
     ) -> None:
         resolved = (base_url or os.environ.get(ENV_BASE_URL) or DEFAULT_BASE_URL).rstrip('/')
+        self._base_url = resolved
         self._timeout = _http_timeout(timeout)
         self._owns_client = client is None
         self._client = client or httpx.Client(base_url=resolved, timeout=self._timeout)
+
+    @property
+    def base_url(self) -> str:
+        return self._base_url
 
     @property
     def client(self) -> httpx.Client:
